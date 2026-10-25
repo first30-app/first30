@@ -14,6 +14,10 @@
 > 모아야 할 증거 목록을 보여줍니다. 운전자 진술만으로는 어떤 가감 요소도 확정하지 않습니다.
 > 퍼스트30은 다친 척이나 과장 신고를 돕는 안내를 하지 않습니다.
 
+## 웹 시연 화면
+
+https://first30-app.github.io/first30/demo/index.html — 브라우저에서 바로 여는 시연 화면(30초 안내·차량 기록·확인 질문·판단 과정). 설치가 필요 없습니다.
+
 ## APK 위치
 
 [`apk/팀명_퍼스트30_release.apk`](apk/) — 서명된 release 빌드 (versionName 1.0.0, minSdk 28, APK Signature Scheme v1·v2·v3).
