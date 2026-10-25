@@ -23,7 +23,9 @@
     **엔진 규칙을 바꾸면 JS·Kotlin 을 함께 고치고 `npm run golden` 후 두 테스트를 모두 돌릴 것.**
     숫자 표기는 JS 규칙을 직접 구현(`seal/Canonical.kt` — JDK `Double.toString` 금지), 반올림·삼각함수는 `model/JsMath.kt`.
     Jev 네트워크 호출은 앱이 `JevTransport` 로 넣는다.
-  - `:app` (Compose) — 빈 화면 골격만. **다음 작업: 신호 수집기·트리거·화면(아래 3~5).** 차량 속도·충격 감지는 10/28 설명회 확인 뒤.
+  - `:app` (Compose) — 10Hz 링버퍼·가짜 차량 신호원(시나리오 재생)·사고 컨트롤러·5단계 카드 화면·TTS. **다음 작업: 실제 Vehicle SDK 신호·충격 트리거(아래 3~4).** 차량 속도·충격 감지는 10/28 설명회 확인 뒤.
+  - release: `./gradlew :app:exportReleaseApk` → 서명된 APK(v1·v2·v3, R8 축소)를 `apk/<팀명>_퍼스트30_release.apk` 로 복사(팀명 = `gradle.properties` 의 `submission.teamName`, 아직 `팀명`).
+    서명 키·비밀번호는 `android/keystore/`·`android/keystore.properties`(gitignore, 잃어버리면 같은 앱으로 업데이트 불가 — 따로 백업). 없으면 debug 키로 서명된다.
 
 ## 판단 규칙 요약 (바꾸려면 DESIGN.md 3장과 테스트를 함께 고칠 것)
 
