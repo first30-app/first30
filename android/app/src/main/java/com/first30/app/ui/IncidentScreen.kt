@@ -75,6 +75,8 @@ private val KoText = TextStyle(lineBreak = LineBreak.Paragraph.copy(strictness =
  * - 카드가 바뀌거나 지금 카드의 `tts` 가 바뀌면(확인 답으로 과실 카드가 갱신) [speaker] 로 읽는다. 자막은 음성이 꺼져도 나온다.
  * - 단계를 누르면 그 카드를 보여 주고 읽는다. 타임라인이 다음 카드로 넘어가면 다시 따라간다(30초 뒤엔 누른 카드에 머문다).
  * - 확인 질문 카드는 예/아니요 버튼을 늘 화면에 둔다. 빠른 도로 모드에서도 버튼은 보이고, 음성은 카드 tts 그대로 읽는다.
+ * - 질문 카드가 지나간 뒤에도 답이 없으면 뒤 카드(말하기·다음, 30초 뒤 포함)에 작은 예/아니요 막대를 둔다([IncidentUi.questionBarCard]).
+ *   막대는 읽지 않고 타임라인도 멈추지 않는다. 막대로 답하면 지금 카드에 머물고 ≈4초 "답을 반영했어요 · 과실 카드 보기" 안내를 띄운다.
  */
 @Composable
 fun IncidentScreen(
@@ -87,6 +89,8 @@ fun IncidentScreen(
     clock: () -> Long = SystemClock::elapsedRealtime,
     /** 미리보기용: 시계 대신 이 경과 초로 고정. */
     frozenElapsedSec: Double? = null,
+    /** 미리보기용: 막대로 답한 뒤의 안내를 이 과실 카드 번호로 띄워 둔다. */
+    previewAnsweredNote: Int? = null,
 ) {
     var nowMs by remember { mutableLongStateOf(clock()) }
     if (frozenElapsedSec == null) {
@@ -113,6 +117,24 @@ fun IncidentScreen(
 
     val onStep: (Int) -> Unit = { k -> manual = k to timelineIndex }
 
+    // 뒤 카드의 확인 질문 막대(소리 내지 않는다). 누르면 바로 숨기고(두 번 눌림 방지) 같은 답 경로로 보낸다.
+    // 답이 다시 비워지면(충격 트리거로 기록이 바뀐 경우) ui.answer 키로 다시 띄운다.
+    var barAnswered by remember(ui.startedAtMs, ui.answer) { mutableStateOf(false) }
+    // 막대로 답한 뒤 잠깐 보이는 안내(누르면 과실 카드). 값 = 과실 카드 번호.
+    var answeredNote by remember(ui.startedAtMs) { mutableStateOf(previewAnsweredNote) }
+    val barCard = ui.questionBarCard(shown, timelineIndex, barAnswered)
+    val onBarAnswer: (Boolean) -> Unit = { v ->
+        if (!barAnswered && barCard != null) {
+            barAnswered = true
+            answeredNote = barCard.index
+            onAnswer(v)
+        }
+    }
+    if (frozenElapsedSec == null) {
+        answeredNote?.let { LaunchedEffect(it) { delay(4_000); answeredNote = null } }
+    }
+    val onOpenFault: () -> Unit = { answeredNote?.let { k -> manual = k to timelineIndex }; answeredNote = null }
+
     BoxWithConstraints(
         modifier
             .fillMaxSize()
@@ -123,6 +145,8 @@ fun IncidentScreen(
         val big = maxWidth >= 1100.dp
         // 낮은 가로 화면(휴대폰 가로 ≈ 400dp): 글자·여백을 줄여 카드와 버튼이 한 화면에 들어오게
         val compact = maxHeight < 520.dp
+        val narrow = maxWidth < 600.dp
+        val tall = maxHeight >= 700.dp
         if (wide) {
             Row(Modifier.fillMaxSize().padding(if (compact) 10.dp else 16.dp), horizontalArrangement = Arrangement.spacedBy(if (compact) 12.dp else 16.dp)) {
                 Column(
@@ -136,6 +160,7 @@ fun IncidentScreen(
                 }
                 Column(Modifier.weight(1f).fillMaxHeight()) {
                     CardPanel(ui, card, onAnswer, wide = true, compact = compact, big = big, modifier = Modifier.weight(1f))
+                    BarSlot(barCard, answeredNote, onBarAnswer, onOpenFault, stacked = false, showHint = !compact || big)
                     Subtitle(card.tts, compact)
                 }
             }
@@ -147,6 +172,7 @@ fun IncidentScreen(
                 }
                 StatusChips(ui, speakerState, vertical = false)
                 CardPanel(ui, card, onAnswer, wide = false, compact = false, big = false, modifier = Modifier.weight(1f))
+                BarSlot(barCard, answeredNote, onBarAnswer, onOpenFault, stacked = narrow, showHint = tall)
                 StepList(ui, shown, onStep, vertical = false)
                 Subtitle(card.tts, false)
             }
@@ -376,6 +402,82 @@ private fun ConfirmBlock(confirm: ConfirmUi, onAnswer: (Boolean) -> Unit, stacke
                 no(Modifier.weight(1f))
             }
         }
+    }
+}
+
+/** 확인 질문 막대 자리: 질문이 남아 있으면 막대, 막대로 답한 직후면 안내, 아니면 아무것도. */
+@Composable
+private fun BarSlot(barCard: CardUi?, answeredNote: Int?, onAnswer: (Boolean) -> Unit, onOpenFault: () -> Unit, stacked: Boolean, showHint: Boolean) {
+    val confirm = barCard?.confirm
+    when {
+        confirm != null -> QuestionBar(confirm, onAnswer, stacked, showHint)
+        answeredNote != null -> AnsweredNote(onOpenFault)
+    }
+}
+
+/**
+ * 뒤 카드에 남겨 두는 작은 확인 질문(엔진 confirm.question 그대로). 소리 내어 읽지 않는다(liveRegion 도 두지 않는다).
+ * 예/아니요는 같은 모양·크기·색 — 어느 답도 권하지 않도록(DESIGN.md 5).
+ */
+@Composable
+private fun QuestionBar(confirm: ConfirmUi, onAnswer: (Boolean) -> Unit, stacked: Boolean, showHint: Boolean) {
+    val shape = RoundedCornerShape(14.dp)
+    val answerButton: @Composable (String, Boolean, Modifier) -> Unit = { label, value, m ->
+        OutlinedButton(
+            onClick = { onAnswer(value) },
+            modifier = m.heightIn(min = 56.dp),
+            shape = RoundedCornerShape(12.dp),
+            border = BorderStroke(2.dp, F30.muted),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = F30.fg),
+        ) { Text(label, fontSize = 20.sp, fontWeight = FontWeight.Bold, maxLines = 1) }
+    }
+    val text: @Composable (Modifier) -> Unit = { m ->
+        Column(m, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            KText(confirm.question, color = F30.fg, fontSize = 17.sp, lineHeight = 23.sp, fontWeight = FontWeight.SemiBold, style = KoText, maxLines = 2, overflow = TextOverflow.Ellipsis)
+            if (showHint) confirm.hint?.let {
+                KText("${it}라고 답해 주세요", color = F30.muted, fontSize = 14.sp, lineHeight = 19.sp, style = KoText, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+    val m = Modifier
+        .fillMaxWidth()
+        .padding(top = 8.dp)
+        .border(1.5.dp, F30.hazard, shape)
+        .padding(horizontal = 12.dp, vertical = 8.dp)
+    if (stacked) {
+        Column(m, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            text(Modifier.fillMaxWidth())
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                answerButton("예", true, Modifier.weight(1f))
+                answerButton("아니요", false, Modifier.weight(1f))
+            }
+        }
+    } else {
+        Row(m, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            text(Modifier.weight(1f))
+            answerButton("예", true, Modifier.width(112.dp))
+            answerButton("아니요", false, Modifier.width(112.dp))
+        }
+    }
+}
+
+/** 막대로 답한 직후 잠깐(≈4초) 보이는 안내. 소리 내지 않는다. 누르면 과실 카드로(자동으로 넘기지 않는다). */
+@Composable
+private fun AnsweredNote(onOpenFault: () -> Unit) {
+    val shape = RoundedCornerShape(14.dp)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(top = 8.dp)
+            .border(1.5.dp, F30.good, shape)
+            .clickable(onClick = onOpenFault)
+            .heightIn(min = 56.dp)
+            .padding(horizontal = 14.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(Modifier.size(9.dp).background(F30.good, CircleShape))
+        KText("답을 반영했어요 · 과실 카드 보기", color = F30.fg, fontSize = 17.sp, style = KoText, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
 }
 

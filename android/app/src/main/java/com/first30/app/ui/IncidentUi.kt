@@ -32,6 +32,21 @@ data class IncidentUi(
         return i
     }
 
+    /**
+     * 뒤 카드에 띄우는 작은 확인 질문 막대: 띄우면 질문을 가진 카드(그 `confirm`), 아니면 null.
+     *
+     * - 아직 답이 없고([answer] == null, [answeredLocally] == false — 막대에서 누른 뒤 새 결과가 오기 전),
+     * - 확인 질문 카드가 있고,
+     * - 타임라인이 그 카드를 지났고(30초가 끝난 뒤에도 그대로 — 마지막 카드가 질문 카드인 긴급 모드는 막대 없음),
+     * - 지금 보이는 카드([shownIndex])가 그 카드보다 뒤일 때만. 질문 카드 자체(큰 버튼이 있다)와 앞 카드에는 띄우지 않는다.
+     */
+    fun questionBarCard(shownIndex: Int, timelineIndex: Int, answeredLocally: Boolean = false): CardUi? {
+        if (answer != null || answeredLocally) return null
+        val k = cards.indexOfFirst { it.confirm != null }
+        if (k < 0) return null
+        return if (timelineIndex > k && shownIndex > k) cards[k] else null
+    }
+
     companion object {
         const val TOTAL_SEC = 30
     }

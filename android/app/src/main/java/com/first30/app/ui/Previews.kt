@@ -23,6 +23,31 @@ private fun ConfirmWidePreview() = First30Theme {
     IncidentScreen(previewUi("confirm_needed"), FakeSpeaker(), {}, {}, frozenElapsedSec = 12.0)
 }
 
+@Preview(name = "phone · question bar on 말하기", widthDp = 400, heightDp = 860)
+@Composable
+private fun QuestionBarPhonePreview() = First30Theme {
+    IncidentScreen(previewUi("confirm_needed"), FakeSpeaker(), {}, {}, frozenElapsedSec = 21.0)
+}
+
+@Preview(name = "phone landscape · question bar", widthDp = 860, heightDp = 400)
+@Composable
+private fun QuestionBarLandscapePreview() = First30Theme {
+    IncidentScreen(previewUi("confirm_needed"), FakeSpeaker(), {}, {}, frozenElapsedSec = 21.0)
+}
+
+@Preview(name = "head unit · question bar", widthDp = 1280, heightDp = 480)
+@Composable
+private fun QuestionBarWidePreview() = First30Theme {
+    IncidentScreen(previewUi("confirm_needed"), FakeSpeaker(), {}, {}, frozenElapsedSec = 26.0)
+}
+
+@Preview(name = "phone · answered note", widthDp = 400, heightDp = 860)
+@Composable
+private fun AnsweredNotePhonePreview() = First30Theme {
+    val ui = previewUi("confirm_needed", answer = true)
+    IncidentScreen(ui, FakeSpeaker(), {}, {}, frozenElapsedSec = 21.0, previewAnsweredNote = ui.cards.indexOfFirst { it.kind == "estimate" || it.kind == "abstain" })
+}
+
 @Preview(name = "head unit · estimate", widthDp = 1280, heightDp = 480)
 @Composable
 private fun EstimateWidePreview() = First30Theme {
