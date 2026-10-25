@@ -1,18 +1,10 @@
 package com.first30.core.scenarios
 
+import com.first30.core.JsUndefined
+import com.first30.core.golden.Golden
 import com.first30.core.model.Ctx
 import com.first30.core.model.Frame
 import com.first30.core.model.JsScalar
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.JsonArray
-import kotlinx.serialization.json.JsonElement
-import kotlinx.serialization.json.JsonNull
-import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.booleanOrNull
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import org.junit.jupiter.api.AfterAll
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -22,41 +14,22 @@ import kotlin.math.abs
 
 /**
  * Kotlin synthFrames / SCENARIOS vs the JS golden fixtures (golden/synth.json, golden/scenarios/<id>.json, golden/frames/).
- * Minimal private fixture reader for now (to be consolidated with com.first30.core.golden.Golden later).
+ * Fixtures are read through com.first30.core.golden.Golden.
  */
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class SynthTest {
 
-    // ---------- minimal golden reader (FORMAT.md tags) ----------
-    private object Undef // {"$undef":true}
+    // ---------- golden reader: com.first30.core.golden.Golden ----------
+    private val Undef = JsUndefined // {"$undef":true}
 
-    private fun resource(path: String): JsonElement {
-        val stream = javaClass.classLoader.getResourceAsStream("golden/$path") ?: error("missing golden/$path")
-        return Json.parseToJsonElement(stream.bufferedReader(Charsets.UTF_8).use { it.readText() })
-    }
+    /** [Golden.load] with function tags as the plain string "\$fn" (the form [specMap] uses for function-valued options). */
+    private fun load(path: String): Any? = fnAsTag(Golden.load(path))
 
-    /** Decodes tags into plain Kotlin: null, Undef, Double, String, Boolean, List, Map ("$fn" → the tag string). */
-    private fun decode(e: JsonElement): Any? = when (e) {
-        is JsonNull -> null
-        is JsonPrimitive -> if (e.isString) e.content else e.booleanOrNull ?: e.content.toDouble()
-        is JsonArray -> e.map { decode(it) }
-        is JsonObject -> {
-            val tag = e.keys.singleOrNull()?.takeIf { it.startsWith("$") }
-            when (tag) {
-                "\$undef" -> Undef
-                "\$num" -> when (val s = e.getValue(tag).jsonPrimitive.content) {
-                    "NaN" -> Double.NaN
-                    "Infinity" -> Double.POSITIVE_INFINITY
-                    "-Infinity" -> Double.NEGATIVE_INFINITY
-                    "-0" -> -0.0
-                    else -> error("bad \$num $s")
-                }
-                "\$frames" -> decode(resource("frames/${e.getValue(tag).jsonPrimitive.content}.json"))
-                "\$fn" -> "\$fn"
-                null -> e.mapValues { decode(it.value) }
-                else -> error("unsupported tag $tag")
-            }
-        }
+    private fun fnAsTag(v: Any?): Any? = when (v) {
+        is Golden.FnRef -> "\$fn"
+        is Map<*, *> -> v.entries.associate { (k, x) -> k to fnAsTag(x) }
+        is List<*> -> v.map { fnAsTag(it) }
+        else -> v
     }
 
     private fun scalar(v: Any?): JsScalar = when (v) {
@@ -164,7 +137,7 @@ class SynthTest {
     @Test
     fun synthEntriesMatchGolden() {
         @Suppress("UNCHECKED_CAST")
-        val entries = (decode(resource("synth.json")) as Map<String, Any?>)["entries"] as List<Map<String, Any?>>
+        val entries = (load("synth.json") as Map<String, Any?>)["entries"] as List<Map<String, Any?>>
         assertEquals(30, entries.size)
         for (e in entries) {
             val label = e["label"] as String
@@ -177,12 +150,12 @@ class SynthTest {
     @Test
     fun scenariosMatchGolden() {
         @Suppress("UNCHECKED_CAST")
-        val index = (decode(resource("index.json")) as Map<String, Any?>)["scenarios"] as List<Map<String, Any?>>
+        val index = (load("index.json") as Map<String, Any?>)["scenarios"] as List<Map<String, Any?>>
         assertEquals(index.map { it["id"] }, Scenarios.ALL.map { it.id }, "scenario order")
         assertEquals(12, Scenarios.ALL.size)
         for (sc in Scenarios.ALL) {
             @Suppress("UNCHECKED_CAST")
-            val g = decode(resource("scenarios/${sc.id}.json")) as Map<String, Any?>
+            val g = load("scenarios/${sc.id}.json") as Map<String, Any?>
             assertEquals(g["id"], sc.id)
             assertEquals(g["title"], sc.title, "${sc.id}: title")
             assertEquals(g["spec"], specMap(sc.spec), "${sc.id}: spec")
@@ -196,7 +169,7 @@ class SynthTest {
     fun brakingSpeedClosuresMatchKnownParameters() {
         // the dumper only recovered other_cutin_unclear's closure parameters; check them against the Kotlin closure
         @Suppress("UNCHECKED_CAST")
-        val g = decode(resource("scenarios/other_cutin_unclear.json")) as Map<String, Any?>
+        val g = load("scenarios/other_cutin_unclear.json") as Map<String, Any?>
         @Suppress("UNCHECKED_CAST")
         val fn = g["speedFn"] as Map<String, Any?>
         val ref = brakingSpeed(fn["cruise"] as Double, fn["fromS"] as Double, fn["decelKphPerS"] as Double)
