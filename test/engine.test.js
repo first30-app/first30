@@ -1256,3 +1256,16 @@ test('detected 확인 질문에도 굽은 길 안내를 덧붙여 읽고(뜻만 
     assert.ok(['highway', 'caution'].includes(fast.flow.mode));
   }
 });
+
+// ---------- 회귀: 내비 주의 지점은 자기 키만 ----------
+test('내비 주의 지점: constructor·toString·__proto__ 같은 상속 속성 이름은 장소 문장에 넣지 않고, 아는 주의 지점만 넣는다', async () => {
+  const sc = F.SCENARIOS.find((s) => s.id === 'other_cutin_unclear');
+  const m = F.analyzeWindow(sc.frames, urban());
+  const bogus = { ...urban(), navCautions: ['constructor', 'toString', '__proto__', 'hasOwnProperty'] };
+  assert.ok(!F.renderFacts(m, bogus).place.some((s) => /내비게이션:/.test(s)), F.renderFacts(m, bogus).place.join(' / '));
+  const out = await runLocal(sc.frames, bogus);
+  assert.ok(!out.facts.place.some((s) => /내비게이션:/.test(s)));
+  assert.doesNotMatch(out.facts.place.join(' '), /undefined|function/);
+  const known = F.renderFacts(m, { ...urban(), navCautions: ['constructor', 'LANE_CHANGE_CAMERA_ALERT'] });
+  assert.equal(known.place.filter((s) => /^내비게이션: /.test(s)).length, 1);
+});

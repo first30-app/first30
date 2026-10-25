@@ -5,7 +5,7 @@
 
 ## 지금 상태 (2026-10-25 기준)
 
-- `engine/` 판단 엔진(JavaScript, 의존성 없음). `npm test`(= `node --test test/engine.test.js`) 101개 통과.
+- `engine/` 판단 엔진(JavaScript, 의존성 없음). `npm test`(= `node --test test/engine.test.js`) 102개 통과.
   곡선 진입·곡선 끝·짧은 굽은 길·차로 어긋남·같은 쪽 신호를 켠 채 굽은 길·차선 안 흔들림·회피 조향·GPS 방향 잡음·방향 지연·2Hz 프레임·
   핸들 부호 반대·결측·깜빡임 신호·느린 고속도로 진로변경·트리거 종류(음성·버튼·급감속)·늦게 온 에어백 트리거·운전자 확인 질문·
   진술 주어/부정/의도·빠른 도로 안전 안내·봉인 원본값·곡률이 바뀌는 길에서 거꾸로 읽힌 방향 같은 경계 상황 테스트 포함.
@@ -17,7 +17,13 @@
 - `demo/` 시연 화면. `node demo/build.js` → `demo/index.html`(브라우저로 바로 여는 단독 파일), `demo/artifact.html`(게시용 조각).
 - `submission/` 공식 접수양식을 채운 기획서 docx와 채우는 스크립트(docx는 개인정보가 있어 .gitignore 로 뺐다).
 - `docs/DESIGN.md` 설계 문서, `docs/CONTEST.md` 공식 요강 정리.
-- **안드로이드 앱은 아직 없다.** 다음 작업이 Kotlin 앱이다.
+- `android/` Gradle 프로젝트(JDK 17: `JAVA_HOME=$(brew --prefix openjdk@17)/libexec/openjdk.jdk/Contents/Home ./gradlew :core:test`).
+  - `:core` (순수 Kotlin/JVM) — **엔진 전체 이식 완료**(prepare → … → run, 봉인 직렬화·SHA-256, 합성기·시나리오).
+    JS 와 비트 단위로 같다: 골든 비교(기록된 호출 전부 + 무작위 run 8천 건·진술 7만 건 대조) + JS 테스트를 옮긴 독립 명세 `spec/` 102개.
+    **엔진 규칙을 바꾸면 JS·Kotlin 을 함께 고치고 `npm run golden` 후 두 테스트를 모두 돌릴 것.**
+    숫자 표기는 JS 규칙을 직접 구현(`seal/Canonical.kt` — JDK `Double.toString` 금지), 반올림·삼각함수는 `model/JsMath.kt`.
+    Jev 네트워크 호출은 앱이 `JevTransport` 로 넣는다.
+  - `:app` (Compose) — 빈 화면 골격만. **다음 작업: 신호 수집기·트리거·화면(아래 3~5).** 차량 속도·충격 감지는 10/28 설명회 확인 뒤.
 
 ## 판단 규칙 요약 (바꾸려면 DESIGN.md 3장과 테스트를 함께 고칠 것)
 
