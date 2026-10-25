@@ -30,7 +30,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -376,23 +375,18 @@ private fun ConfirmBlock(confirm: ConfirmUi, onAnswer: (Boolean) -> Unit, stacke
         confirm.hint?.let {
             KText("${it}라고 답해 주세요", color = F30.hazard, fontSize = if (stacked) 19.sp else 17.sp, lineHeight = if (stacked) 27.sp else 24.sp, style = KoText)
         }
-        val yes: @Composable (Modifier) -> Unit = { m ->
-            Button(
-                onClick = { onAnswer(true) },
-                modifier = m.heightIn(min = if (compact) 60.dp else 72.dp),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = F30.fg, contentColor = F30.bg),
-            ) { Text("예", fontSize = 26.sp, fontWeight = FontWeight.Bold) }
-        }
-        val no: @Composable (Modifier) -> Unit = { m ->
+        // 예/아니요는 같은 모양·크기·색 — 어느 답도 권하지 않도록(DESIGN.md 5). 질문 막대와 같은 모양.
+        val answerButton: @Composable (String, Boolean, Modifier) -> Unit = { label, value, m ->
             OutlinedButton(
-                onClick = { onAnswer(false) },
+                onClick = { onAnswer(value) },
                 modifier = m.heightIn(min = if (compact) 60.dp else 72.dp),
                 shape = RoundedCornerShape(12.dp),
                 border = BorderStroke(2.dp, F30.muted),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = F30.fg),
-            ) { Text("아니요", fontSize = 26.sp, fontWeight = FontWeight.Bold) }
+            ) { Text(label, fontSize = 26.sp, fontWeight = FontWeight.Bold) }
         }
+        val yes: @Composable (Modifier) -> Unit = { m -> answerButton("예", true, m) }
+        val no: @Composable (Modifier) -> Unit = { m -> answerButton("아니요", false, m) }
         if (stacked) {
             yes(Modifier.fillMaxWidth())
             no(Modifier.fillMaxWidth())
