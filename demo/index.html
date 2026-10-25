@@ -1530,7 +1530,8 @@ window.First30 = window.First30 || {};
     const place = [];
     const rt = roadTypeOf(ctx);
     place.push(rt === 'highway' ? '사고 장소는 고속도로' : rt === 'urban' ? '사고 장소는 일반도로' : '도로 유형 정보 없음');
-    for (const c of ctx.navCautions || []) if (CAUTION_KO[c]) place.push(`내비게이션: ${CAUTION_KO[c]}`);
+    // 자기 키만 본다 — 'constructor' 같은 상속 속성이 사실 문장에 섞이지 않도록
+    for (const c of ctx.navCautions || []) if (Object.prototype.hasOwnProperty.call(CAUTION_KO, c)) place.push(`내비게이션: ${CAUTION_KO[c]}`);
 
     const statement = redact(String(ctx.driverStatement || '').trim().slice(0, 300));
     return {

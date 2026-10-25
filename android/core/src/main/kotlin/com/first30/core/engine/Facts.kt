@@ -32,21 +32,6 @@ internal val CAUTION_KO: Map<String, String> = linkedMapOf(
     "SCHOOL_ZONE" to "어린이보호구역 안내가 있었음",
 )
 
-/**
- * JS 객체 리터럴 조회 `CAUTION_KO[c]` 를 그대로: 자기 키가 없으면 Object.prototype 의 값이 나온다
- * (예: 'constructor' → 함수 → 문장에 "function Object() { [native code] }"). JS 의 이 동작까지 맞춘다.
- */
-internal fun objectLiteralLookup(table: Map<String, String>, key: String): String? {
-    table[key]?.let { return it }
-    return when (key) {
-        "constructor" -> "function Object() { [native code] }"
-        "__defineGetter__", "__defineSetter__", "hasOwnProperty", "__lookupGetter__", "__lookupSetter__",
-        "isPrototypeOf", "propertyIsEnumerable", "toString", "valueOf", "toLocaleString" -> "function $key() { [native code] }"
-        "__proto__" -> "[object Object]"
-        else -> null
-    }
-}
-
 /** engine.js 993행 `UNCERTAIN_KO`. */
 internal val UNCERTAIN_KO: Map<String, String> = linkedMapOf(
     "too_large" to "이동 폭이 차로 하나보다 커서 (곡선 도로·회전·연속 차로변경 가능성)",
@@ -195,7 +180,8 @@ fun renderFacts(m: WindowMetrics, ctxIn: Ctx?): Facts {
     val place = ArrayList<String>()
     val rt = roadTypeOf(ctx)
     place.add(if (rt == "highway") "사고 장소는 고속도로" else if (rt == "urban") "사고 장소는 일반도로" else "도로 유형 정보 없음")
-    for (c in ctx.navCautions ?: emptyList()) objectLiteralLookup(CAUTION_KO, c)?.let { place.add("내비게이션: $it") }
+    // 자기 키만 본다 (engine.js 1122) — 'constructor' 같은 상속 속성이 사실 문장에 섞이지 않도록
+    for (c in ctx.navCautions ?: emptyList()) CAUTION_KO[c]?.let { place.add("내비게이션: $it") }
 
     val statement = redact(jsTrim(ctx.driverStatement ?: "").jsSlice(0, 300))
     return Facts(
