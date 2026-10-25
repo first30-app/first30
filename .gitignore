@@ -1,0 +1,17 @@
+node_modules/
+.DS_Store
+*.log
+android/build/
+android/app/build/
+android/.gradle/
+android/local.properties
+*.keystore
+*.jks
+.env
+
+# 제출용 서류(개인정보 포함) — 저장소에 올리지 않는다
+submission/*.docx
+submission/*.pdf
+
+# 골든 픽스처(17MB) — npm run golden 으로 다시 만든다
+android/core/src/test/resources/golden/

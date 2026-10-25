@@ -1,0 +1,23 @@
+# Gradle
+.gradle/
+build/
+**/build/
+.kotlin/
+
+# Local config (contains machine-specific SDK path)
+local.properties
+
+# Signing
+*.jks
+*.keystore
+keystore.properties
+
+# IDE
+.idea/
+*.iml
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+*.apk
+!/apk/*.apk

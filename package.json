@@ -1,0 +1,14 @@
+{
+  "name": "first30",
+  "version": "0.1.0",
+  "private": true,
+  "description": "퍼스트30 — 사고 직후 30초 동반자 (판단 엔진 + 시연 화면)",
+  "license": "UNLICENSED",
+  "scripts": {
+    "test": "node --test test/engine.test.js",
+    "build:demo": "node demo/build.js",
+    "golden": "node test/dump-golden.js",
+    "numbers": "node test/dump-numbers.js"
+  },
+  "engines": { "node": ">=18" }
+}

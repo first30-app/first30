@@ -1,0 +1,706 @@
+<title>퍼스트30</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: 위쪽은 운전석 화면(주인공)과 사고 장면 조작부, 아래는 충돌 전 10초 기록과 판단 과정 3단.
+   야간 계기판 톤의 다크 단일 테마 — 차량 화면을 그대로 옮긴 시연이라 의도적으로 한 가지 모습만 쓴다. */
+:root {
+  color-scheme: dark;
+  --bg: #0b0f13;
+  --panel: #121920;
+  --panel-2: #18222b;
+  --line: #26333e;
+  --fg: #e7edf2;
+  --muted: #a9b7c2;
+  --dim: #8496a6;      /* 보조 글자: 가장 어두운 면(#18222b)에서도 대비 5.3:1 */
+  --hazard: #ffb020;      /* 비상등 앰버: 브랜드 강조 */
+  --hazard-ink: #1b1300;
+  --vehicle: #1e8fcc;     /* 차로변경·차량 기록 */
+  --signal: #c98000;      /* 방향지시등 */
+  --brake: #c7509f;       /* 브레이크 */
+  --good: #3ecf8e;
+  --critical: #ff5a4f;
+  --font-ui: 'IBM Plex Sans KR', 'Apple SD Gothic Neo', 'Malgun Gothic', 'Noto Sans KR', sans-serif;
+  --font-data: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+  --r: 10px;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--font-ui); font-size: 15px; line-height: 1.55; word-break: keep-all; overflow-wrap: anywhere; }
+a { color: var(--fg); text-decoration-color: var(--dim); text-underline-offset: 3px; }
+a:hover { text-decoration-color: var(--hazard); }
+:focus-visible { outline: 2px solid var(--hazard); outline-offset: 2px; }
+h1, h2, h3 { text-wrap: balance; margin: 0; }
+.wrap {
+  max-width: 1180px; margin: 0 auto;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 56px;
+  display: grid; gap: 22px;
+}
+.num { font-family: var(--font-data); font-variant-numeric: tabular-nums; }
+.eyebrow { font-size: 12px; letter-spacing: .08em; color: var(--muted); text-transform: uppercase; }
+
+/* 머리 */
+header.top { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 18px; }
+.brand { display: flex; align-items: center; gap: 12px; }
+.hazard-mark { width: 34px; height: 30px; flex: none; }
+.brand h1 { font-size: 26px; font-weight: 700; letter-spacing: -.01em; }
+.brand p { margin: 0; color: var(--muted); font-size: 14px; }
+.badges { display: flex; flex-wrap: wrap; gap: 8px; margin-left: auto; }
+.badge { font-size: 12px; padding: 4px 10px; border: 1px solid var(--line); border-radius: 999px; color: var(--muted); background: var(--panel); }
+.badge b { color: var(--fg); font-weight: 600; }
+
+/* 1단: 조작부 + 차량 화면 */
+.stage { display: grid; grid-template-columns: 330px minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 960px) { .stage { grid-template-columns: minmax(0, 1fr); } }
+.controls { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 14px; }
+.field { display: grid; gap: 6px; }
+.field label, .field .lab { font-size: 13px; color: var(--muted); }
+select, textarea {
+  width: 100%; font: inherit; color: var(--fg); background: var(--panel-2);
+  border: 1px solid var(--line); border-radius: 8px; padding: 9px 10px;
+}
+textarea { resize: vertical; min-height: 74px; }
+.seg { display: grid; grid-template-columns: 1fr 1fr; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.seg input { position: absolute; opacity: 0; pointer-events: none; }
+.seg label { text-align: center; padding: 8px 6px; cursor: pointer; color: var(--muted); font-size: 14px; background: var(--panel-2); }
+.seg input:checked + label { background: var(--fg); color: var(--bg); font-weight: 600; }
+.seg input:focus-visible + label { outline: 2px solid var(--hazard); outline-offset: -2px; }
+.seg.seg3 { grid-template-columns: repeat(3, 1fr); }
+.qa { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 14px 0 4px; }
+.qa .btn { min-width: 112px; font-size: 17px; padding: 12px 18px; }
+.qa .btn.yes { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.btn {
+  font: inherit; font-weight: 600; cursor: pointer; border-radius: 8px; padding: 11px 14px;
+  border: 1px solid var(--line); background: var(--panel-2); color: var(--fg);
+}
+.btn:hover { border-color: var(--muted); }
+.btn.primary { background: var(--hazard); color: var(--hazard-ink); border-color: var(--hazard); }
+.btn.primary:hover { filter: brightness(1.07); }
+.check { display: flex; align-items: center; gap: 8px; font-size: 14px; color: var(--muted); }
+.check input { width: 18px; height: 18px; accent-color: var(--hazard); }
+.hint { font-size: 12.5px; color: var(--dim); margin: 0; }
+
+/* 차량 화면 */
+.screen {
+  background: #05080b; border: 1px solid var(--line); border-radius: 18px; padding: 14px;
+  box-shadow: inset 0 0 0 6px #0f151b;
+  display: grid; grid-template-rows: auto 1fr auto; gap: 10px; min-height: 420px;
+}
+.sbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 4px 6px 0; }
+.ring { width: 46px; height: 46px; flex: none; }
+.ring circle { fill: none; stroke-width: 4; }
+.ring .track { stroke: var(--line); }
+.ring .prog { stroke: var(--hazard); stroke-linecap: round; transform: rotate(-90deg); transform-origin: 50% 50%; transition: stroke-dashoffset .2s linear; }
+.clock { font-size: 20px; font-weight: 500; }
+.clock small { color: var(--dim); font-size: 13px; }
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+.chip { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--line); color: var(--muted); }
+.chip .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--dim); }
+.chip.crit { color: var(--fg); border-color: var(--critical); } .chip.crit .dot { background: var(--critical); }
+.chip.warn { color: var(--fg); border-color: var(--hazard); } .chip.warn .dot { background: var(--hazard); }
+.chip.ok { color: var(--fg); border-color: var(--good); } .chip.ok .dot { background: var(--good); }
+.card { padding: 10px 12px 6px; min-width: 0; }
+.card .kind { font-size: 13px; color: var(--hazard); letter-spacing: .04em; }
+.card h2 { font-size: clamp(22px, 3.2vw, 34px); font-weight: 700; margin: 4px 0 12px; line-height: 1.25; }
+.card ul { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
+.card li { font-size: clamp(14.5px, 1.6vw, 17px); color: #cfd9e1; padding-left: 16px; position: relative; overflow-wrap: anywhere; }
+.card li::before { content: ""; position: absolute; left: 0; top: .72em; width: 6px; height: 6px; border-radius: 50%; background: var(--dim); }
+.card li.say::before { background: var(--good); }
+.card li.avoid::before { background: var(--critical); border-radius: 1px; }
+.card li.box::before { background: transparent; border: 1.5px solid var(--muted); border-radius: 2px; width: 7px; height: 7px; top: .62em; }
+.steps { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; }
+.steps button {
+  font: inherit; font-size: 13px; cursor: pointer; padding: 8px 4px 7px; border-radius: 8px;
+  background: transparent; border: 1px solid var(--line); color: var(--dim); display: grid; gap: 1px;
+}
+.steps button .t { font-family: var(--font-data); font-size: 11px; }
+.steps button[aria-current="step"] { color: var(--fg); border-color: var(--hazard); background: rgba(255,176,32,.08); }
+.subtitle { display: flex; gap: 10px; align-items: flex-start; font-size: 14px; color: var(--muted); border-top: 1px solid var(--line); padding: 9px 6px 2px; }
+.subtitle svg { flex: none; margin-top: 2px; }
+
+/* 공통 섹션 */
+section.block { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 16px; display: grid; gap: 12px; min-width: 0; }
+.block-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.block-head h3 { font-size: 17px; font-weight: 600; }
+.block-head p { margin: 0; color: var(--muted); font-size: 13.5px; }
+
+/* 기록 차트 */
+.charts { display: grid; gap: 4px; position: relative; }
+.chart svg { display: block; width: 100%; overflow: visible; touch-action: pan-y; }
+.chart text { fill: var(--muted); font-family: var(--font-data); font-size: 11px; }
+.chart .ttl { fill: var(--fg); font-family: var(--font-ui); font-size: 12.5px; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .zero { stroke: var(--dim); stroke-dasharray: 3 3; }
+.chart .crash { stroke: var(--critical); stroke-width: 1.5; }
+.chart .xhair { stroke: var(--fg); stroke-width: 1; opacity: .5; }
+.tip {
+  position: absolute; pointer-events: none; background: var(--panel-2); border: 1px solid var(--line); border-radius: 8px;
+  padding: 7px 9px; font-size: 12.5px; color: var(--fg); white-space: normal; max-width: min(340px, calc(100% - 16px));
+  transform: translate(-50%, -100%); top: 0;
+}
+.legend-note { font-size: 12.5px; color: var(--dim); margin: 0; }
+
+/* 판단 과정 */
+.trace { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+@media (max-width: 960px) { .trace { grid-template-columns: minmax(0, 1fr); } }
+.col { background: var(--panel-2); border: 1px solid var(--line); border-radius: var(--r); padding: 14px; display: grid; gap: 10px; align-content: start; min-width: 0; }
+.col h4 { margin: 0; font-size: 14.5px; font-weight: 600; }
+.col .sub { margin: 0; font-size: 12.5px; color: var(--dim); }
+.facts { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.facts li { display: grid; grid-template-columns: 38px minmax(0, 1fr); gap: 8px; font-size: 13.5px; color: #cfd9e1; }
+.src { font-size: 11px; text-align: center; border-radius: 5px; padding: 1px 0; height: fit-content; border: 1px solid var(--line); color: var(--muted); }
+.src.drv { border-style: dashed; }
+.bars { display: grid; gap: 7px; }
+.bar { display: grid; grid-template-columns: minmax(0, 1fr) 46px; gap: 4px 8px; font-size: 13px; }
+.bar .lbl { color: #cfd9e1; }
+.bar .track { grid-column: 1 / -1; height: 8px; background: var(--bg); border-radius: 4px; overflow: hidden; }
+.bar .fill { display: block; height: 100%; background: var(--dim); border-radius: 0 4px 4px 0; }
+.bar.chosen .fill { background: var(--hazard); }
+.bar.chosen .lbl { color: var(--fg); font-weight: 600; }
+.bar .v { text-align: right; color: var(--muted); }
+.nouls { display: grid; gap: 6px; border-top: 1px solid var(--line); padding-top: 10px; }
+.noul { display: grid; grid-template-columns: minmax(0, 1fr) 46px; gap: 8px; font-size: 13px; color: #cfd9e1; }
+.noul .v { text-align: right; color: var(--muted); }
+.result-big { font-size: 34px; font-weight: 700; line-height: 1.1; }
+.result-big small { font-size: 15px; color: var(--muted); font-weight: 500; }
+.mods { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.mods th { text-align: left; color: var(--dim); font-weight: 500; padding: 4px 4px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+.mods th.num { text-align: right; }
+.mods td { padding: 6px 4px; border-bottom: 1px solid var(--line); vertical-align: top; color: #cfd9e1; }
+.mods td.num { text-align: right; white-space: nowrap; }
+.dec { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; }
+.dec i { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--muted); display: inline-block; }
+.dec.applied i { background: var(--fg); border-color: var(--fg); }
+.dec.possible i { background: linear-gradient(90deg, var(--fg) 50%, transparent 50%); border-color: var(--fg); }
+.dec.not_assessed { color: var(--dim); } .dec.not_assessed i { border-style: dashed; }
+.scroll-x { overflow-x: auto; }
+details { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; background: var(--panel-2); }
+summary { cursor: pointer; font-size: 13.5px; color: var(--muted); }
+pre { margin: 10px 0 2px; font-family: var(--font-data); font-size: 12px; line-height: 1.5; color: #cfd9e1; white-space: pre; overflow-x: auto; max-height: 360px; }
+.hashrow { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.hash { font-family: var(--font-data); font-size: 12px; color: #cfd9e1; overflow-wrap: anywhere; min-width: 0; flex: 1 1 260px; }
+.btn.sm { padding: 6px 10px; font-size: 13px; }
+
+footer.notes { color: var(--muted); font-size: 13px; display: grid; gap: 8px; max-width: 78ch; }
+footer.notes p { margin: 0; }
+@media (prefers-reduced-motion: reduce) { .ring .prog { transition: none; } }
+</style>
+
+<div class="wrap">
+  <header class="top">
+    <div class="brand">
+      <svg class="hazard-mark" viewBox="0 0 34 30" aria-hidden="true"><path d="M17 2 L32 28 H2 Z" fill="none" stroke="#ffb020" stroke-width="3" stroke-linejoin="round"/><path d="M17 11 L24.5 24 H9.5 Z" fill="none" stroke="#ffb020" stroke-width="2.4" stroke-linejoin="round"/></svg>
+      <div>
+        <h1>퍼스트30</h1>
+        <p>사고 직후 30초, 차가 먼저 기록하고 안내합니다</p>
+      </div>
+    </div>
+    <div class="badges">
+      <span class="badge">Pleos Connect 앱 <b>시연 화면</b></span>
+      <span class="badge" id="judge-badge">판정기 <b>오프라인 대체 판정기</b></span>
+    </div>
+  </header>
+
+  <div class="stage">
+    <form class="controls" id="controls" autocomplete="off">
+      <div class="field">
+        <label for="scenario">사고 장면</label>
+        <select id="scenario"></select>
+      </div>
+      <div class="field">
+        <span class="lab" id="road-lab">도로</span>
+        <div class="seg" role="radiogroup" aria-labelledby="road-lab">
+          <input type="radio" name="road" id="road-urban" value="urban"><label for="road-urban">일반도로</label>
+          <input type="radio" name="road" id="road-highway" value="highway"><label for="road-highway">고속도로</label>
+        </div>
+      </div>
+      <div class="field">
+        <label for="statement">사고 직후 운전자가 한 말 (음성 인식 결과)</label>
+        <textarea id="statement" rows="3"></textarea>
+        <p class="hint">말을 바꾸면 판단을 바로 다시 계산합니다. 진술은 확인되지 않은 주장으로만 다뤄서, 진술만으로는 어떤 가감 요소도 확정되지 않고, 과실 숫자도 아래 질문의 답이 있어야 나옵니다.</p>
+      </div>
+      <div class="field">
+        <span class="lab" id="confirm-lab">“그때 ○○ 차로로 진로를 바꾸던 중이었나요?”에 대한 답</span>
+        <div class="seg seg3" role="radiogroup" aria-labelledby="confirm-lab">
+          <input type="radio" name="confirm" id="cf-none" value=""><label for="cf-none">묻기 전</label>
+          <input type="radio" name="confirm" id="cf-yes" value="yes"><label for="cf-yes">예</label>
+          <input type="radio" name="confirm" id="cf-no" value="no"><label for="cf-no">아니요</label>
+        </div>
+        <p class="hint">앱이 사고 직후 묻는 질문입니다. 기록에 차로를 바꾸는 움직임이 있으면 그 방향(오른쪽·왼쪽)을 넣어 묻습니다. 기록과 답이 맞아야 숫자가 나옵니다 — 움직임 + “예” → 내 차 진로변경, 차로 유지 + “아니요” → 상대 진로변경. 빠른 도로에서는 질문을 소리 내어 묻지 않고 화면에만 둡니다.</p>
+      </div>
+      <button type="button" class="btn primary" id="play">30초 안내 시작</button>
+      <label class="check" for="voice"><input type="checkbox" id="voice"> 음성 안내 함께 듣기</label>
+      <p class="hint">에어백 전개나 충격 감지로 시작하면 충돌 순간을 알 수 있어 과실 범위까지 계산합니다. “사고 났어”·버튼으로만 시작하면 충돌 시각을 몰라 기록 봉인과 증거 안내만 합니다.</p>
+    </form>
+
+    <div class="screen" role="region" aria-label="차량 화면">
+      <div class="sbar">
+        <svg class="ring" viewBox="0 0 46 46" aria-hidden="true"><circle class="track" cx="23" cy="23" r="19"/><circle class="prog" id="ring" cx="23" cy="23" r="19"/></svg>
+        <div class="clock num" id="clock">00:10 <small>/ 00:30</small></div>
+        <div class="chips">
+          <span class="chip" id="chip-mode"><span class="dot"></span><span>일반도로</span></span>
+          <span class="chip ok" id="chip-seal"><span class="dot"></span><span>기록 봉인됨</span></span>
+        </div>
+      </div>
+      <div class="card" id="card" aria-live="polite">
+        <div class="kind" id="card-kind"></div>
+        <h2 id="card-title"></h2>
+        <ul id="card-lines"></ul>
+        <div class="qa" id="card-qa" hidden></div>
+      </div>
+      <div>
+        <nav class="steps" id="steps" aria-label="30초 안내 단계"></nav>
+        <div class="subtitle"><svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M2 6h3l4-3v10L5 10H2z" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/><path d="M11.5 5.5a3.5 3.5 0 0 1 0 5" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg><span id="tts"></span></div>
+      </div>
+    </div>
+  </div>
+
+  <section class="block" aria-labelledby="rec-h">
+    <div class="block-head">
+      <h3 id="rec-h">충돌 전 10초 차량 기록</h3>
+      <p>방향지시등·핸들·브레이크(Vehicle SDK), 진행 방향(FusedLocation), 속도(차량 속성)를 10Hz 링버퍼로 모은 기록 · 이 기록이 그대로 봉인됩니다</p>
+    </div>
+    <div class="charts" id="charts">
+      <div class="chart" id="ch-speed"></div>
+      <div class="chart" id="ch-lat"></div>
+      <div class="chart" id="ch-events"></div>
+      <div class="tip" id="tip" hidden></div>
+    </div>
+    <p class="legend-note">차트 위에 손가락이나 마우스를 올리면 그 순간의 값을 보여줍니다. 옆 이동은 원래 차로(도로 방향) 기준이며 오른쪽이 +입니다.</p>
+    <details>
+      <summary>기록을 표로 보기 (1초 간격)</summary>
+      <div class="scroll-x"><table class="mods rec" id="rec-table"></table></div>
+    </details>
+  </section>
+
+  <section class="block" aria-labelledby="trace-h">
+    <div class="block-head">
+      <h3 id="trace-h">판단 과정</h3>
+      <p>측정과 계산은 코드가, 해석은 판정 모델이 맡습니다. 확신이 낮으면 숫자 대신 판단을 보류합니다.</p>
+    </div>
+    <div class="trace">
+      <div class="col">
+        <h4>1. 코드가 만든 사실 문장</h4>
+        <p class="sub">원시 숫자 대신 이 문장이 판정 모델 입력이 됩니다</p>
+        <ul class="facts" id="facts"></ul>
+      </div>
+      <div class="col">
+        <h4>2. 판정 (Choice · Noul)</h4>
+        <p class="sub" id="judge-sub"></p>
+        <div class="bars" id="bars"></div>
+        <div class="nouls" id="nouls"></div>
+      </div>
+      <div class="col">
+        <h4>3. 코드가 계산한 내 과실</h4>
+        <div id="result"></div>
+      </div>
+    </div>
+    <details>
+      <summary>판정 모델에 보내는 요청 원문 (TypeSafe Jev systemOne 형식)</summary>
+      <pre id="req"></pre>
+    </details>
+    <div class="hashrow">
+      <span class="eyebrow">무결성 지문 SHA-256</span>
+      <span class="hash" id="hash"></span>
+      <button type="button" class="btn sm" id="copy-hash">지문 복사</button>
+    </div>
+  </section>
+
+  <footer class="notes">
+    <p><b>판정기 안내.</b> 이 시연은 API 키 없이 돌아가도록 규칙으로 만든 오프라인 대체 판정기를 씁니다. 응답 형식은 Jev와 같지만 확률 값은 학습된 모델 출력이 아니라 정해 둔 규칙값이고, 진술에서 뽑은 값은 0.6을 넘기지 않아 가감 요소를 범위에만 넣습니다. 실제 앱은 중계 서버를 거쳐 TypeSafe Jev를 부르고, 응답이 없으면 이 대체 판정기로 내려가며 화면에 그 사실을 표시합니다.</p>
+    <p><b>숫자를 내는 조건.</b> 충돌 순간을 차가 직접 감지했고(에어백·충격 감지), 차량 기록이 사고 유형을 뒷받침할 때만 과실 범위를 냅니다. 굽은 길이나 차로가 어긋난 곳을 따라간 움직임은 진행 방향·핸들 기록으로는 진로변경과 똑같이 보이므로, 앱은 한 가지만 묻습니다 — “그때 (오른쪽) 차로로 진로를 바꾸던 중이었나요?” <b>숫자는 차량 기록과 이 답이 같은 이야기를 할 때만</b> 냅니다: 기록에 진로변경 같은 움직임이 있고 “예”면 “내 차 진로변경”, 기록상 차로를 유지했고 “아니요”면 “상대 진로변경”. 곡선이 끝나는 곳의 진로변경처럼 기록만으로는 차로 유지와 구분되지 않는 경우가 있어서입니다. 진술 문장만으로는 계산하지 않습니다(부정·질문·남의 말을 잘못 읽을 수 있어서). 충돌 직전 내 방향지시등이 켜져 있었거나 운전자가 자기 진로변경을 말하면 “상대 진로변경”은 내지 않습니다. 곡선이 바뀌는 길·회피 조향(브레이크와 함께 꺾음)·정체 저속·기록 결측·짧은 기록, 판정이 기록과 어긋날 때, 음성·버튼으로만 시작했을 때는 판단을 보류합니다. 상대 차의 방향지시등·진로변경은 내 차가 측정할 수 없어 진술로만 범위에 반영합니다.</p>
+    <p><b>과실 범위는 참고치입니다.</b> 손해보험협회 「자동차사고 과실비율 인정기준」 도표에 근거해 계산하며, 최종 비율은 양측 보험사 협의나 과실비율 분쟁심의위원회가 정합니다. 현저한 과실·중과실(과속·음주·휴대전화 등)은 차량 기록만으로 판단하지 않습니다.</p>
+    <p>출처: <a href="https://accident.knia.or.kr/myaccident-content?chartNo=252" target="_blank" rel="noopener">과실비율 정보포털 도표 252</a> · <a href="https://www.goodkyung.com/news/articleView.html?idxno=239410" target="_blank" rel="noopener">동시 진로변경 5:5 안내</a> · <a href="https://m.boannews.com/html/detail.html?idx=128068" target="_blank" rel="noopener">고속도로 비트박스 행동요령</a> · <a href="https://docs.typesafe.ai/" target="_blank" rel="noopener">TypeSafe Jev 문서</a></p>
+  </footer>
+</div>
+
+<!--ENGINE-->
+
+<script>
+(function () {
+  'use strict';
+  const F = window.First30;
+  const $ = (id) => document.getElementById(id);
+  const KIND_KO = { safety: '안전', evidence: '봉인', estimate: '과실', abstain: '과실', speech: '말하기', next: '다음', rescue: '구조' };
+  const MODE_KO = { urban: ['일반도로 안내', ''], highway: ['고속도로 · 비트박스', 'warn'], caution: ['빠른 도로일 수 있음 · 대피 먼저', 'warn'], emergency: ['긴급 · 사람 먼저', 'crit'] };
+  const OPT_KO = {
+    c252_me_B: '내 차가 앞서 진로변경 (도표 252, 내 차 B)',
+    c252_me_A: '상대 차가 앞서 진로변경 (도표 252, 내 차 A)',
+    c252_2: '양쪽 동시 진로변경 (도표 252-2)',
+    none: '해당 없음 · 근거 부족',
+  };
+  const NOUL_KO = {
+    evidence_sufficient: '판단 근거가 충분하다',
+    self_lane_change: '운전자가 자기 진로변경을 말함 (상대 진로변경 판정만 막음)',
+    other_signal_fail: '상대 차가 신호 없이·늦게 진로변경',
+    forbidden_zone: '진로변경 금지 장소였다',
+    bus_lane: '전용차로 위반이 있었다',
+  };
+  const DEC_KO = { applied: '반영', possible: '가능성', not_applied: '미반영', not_assessed: '평가 안 함' };
+  const srcKo = (e) => (e.source === 'vehicle' ? '차량' : e.source === 'model' ? (e.basis && e.basis.includes('nav') ? '진술·내비' : '진술') : '—');
+  const CIRC = 2 * Math.PI * 19;
+
+  const state = { sc: null, ctx: null, out: null, idx: 2, playing: false, t0: 0, raf: 0, spoken: -1 };
+
+  // ---------- 조작부 ----------
+  const sel = $('scenario');
+  F.SCENARIOS.forEach((s) => { const o = document.createElement('option'); o.value = s.id; o.textContent = s.title; sel.appendChild(o); });
+
+  function loadScenario(id) {
+    const sc = F.SCENARIOS.find((s) => s.id === id) || F.SCENARIOS[0];
+    state.sc = sc;
+    // 봉인 시각은 시나리오를 불러온 순간 한 번만 정한다 — 같은 기록이면 다시 계산해도 지문이 같다
+    state.ctx = { ...sc.ctx, navCautions: [...(sc.ctx.navCautions || [])], now: new Date().toISOString() };
+    sel.value = sc.id;
+    $('statement').value = sc.ctx.driverStatement || '';
+    $(state.ctx.roadType === 'highway' ? 'road-highway' : 'road-urban').checked = true;
+    const cf = state.ctx.laneChangeConfirmed;
+    $(cf === true ? 'cf-yes' : cf === false ? 'cf-no' : 'cf-none').checked = true;
+    stop();
+    state.idx = 2;
+    recompute();
+  }
+
+  let pending = 0;
+  async function recompute(opts = {}) {
+    const my = ++pending;
+    const ctx = { ...state.ctx, driverStatement: $('statement').value };
+    const out = await F.run(state.sc.frames, ctx, F.localJudge);
+    if (my !== pending) return;
+    const before = state.out && state.out.flow.cards[state.idx] ? state.out.flow.cards[state.idx].tts : null;
+    state.out = out;
+    renderAll();
+    // 재생 중이거나 화면의 예/아니요로 답했을 때, 지금 카드의 안내가 바뀌었으면 새 안내를 읽는다
+    const after = out.flow.cards[state.idx] ? out.flow.cards[state.idx].tts : null;
+    if (after && after !== before && (state.playing || opts.answered)) { state.spoken = state.idx; speak(after); }
+  }
+
+  sel.addEventListener('change', () => loadScenario(sel.value));
+  let deb = 0;
+  $('statement').addEventListener('input', () => { clearTimeout(deb); deb = setTimeout(recompute, 220); });
+  document.querySelectorAll('input[name="road"]').forEach((r) => r.addEventListener('change', () => { state.ctx.roadType = r.value; recompute(); }));
+  function setConfirm(v, answered = false) {
+    state.ctx.laneChangeConfirmed = v === 'yes' ? true : v === 'no' ? false : undefined;
+    $(v === 'yes' ? 'cf-yes' : v === 'no' ? 'cf-no' : 'cf-none').checked = true;
+    recompute({ answered });
+  }
+  document.querySelectorAll('input[name="confirm"]').forEach((r) => r.addEventListener('change', () => setConfirm(r.value)));
+  $('controls').addEventListener('submit', (e) => e.preventDefault());
+
+  // ---------- 30초 재생 ----------
+  const fmt = (s) => `00:${String(Math.min(30, Math.max(0, Math.floor(s)))).padStart(2, '0')}`;
+  function setClock(s) {
+    $('clock').innerHTML = '';
+    $('clock').append(fmt(s), Object.assign(document.createElement('small'), { textContent: ' / 00:30' }));
+    $('ring').style.strokeDasharray = CIRC;
+    $('ring').style.strokeDashoffset = CIRC * (1 - Math.min(30, s) / 30);
+  }
+  function speak(text) {
+    if (!$('voice').checked || !('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.lang = 'ko-KR'; u.rate = 1.05;
+      window.speechSynthesis.speak(u);
+    } catch (e) { /* 음성 미지원 환경 */ }
+  }
+  function tick() {
+    const s = (performance.now() - state.t0) / 1000;
+    const cards = state.out.flow.cards;
+    let i = 0; cards.forEach((c, k) => { if (s >= c.at) i = k; });
+    if (i !== state.idx) { state.idx = i; renderCard(); }
+    if (state.spoken !== i) { state.spoken = i; speak(cards[i].tts); }
+    setClock(s);
+    if (s >= 30) { stop(); setClock(30); return; }
+    state.raf = requestAnimationFrame(tick);
+  }
+  function play() {
+    stop();
+    state.playing = true; state.idx = 0; state.spoken = -1; state.t0 = performance.now();
+    $('play').textContent = '처음부터 다시';
+    renderCard();
+    state.raf = requestAnimationFrame(tick);
+  }
+  function stop() {
+    state.playing = false; cancelAnimationFrame(state.raf);
+    if ('speechSynthesis' in window) try { window.speechSynthesis.cancel(); } catch (e) {}
+  }
+  $('play').addEventListener('click', play);
+
+  // ---------- 차량 화면 ----------
+  function renderCard() {
+    const { flow } = state.out;
+    const c = flow.cards[state.idx];
+    $('card-kind').textContent = `${String(state.idx + 1).padStart(2, '0')} · ${c.confirm ? '확인' : KIND_KO[c.kind]} · ${c.at}초`;
+    $('card-title').textContent = c.title;
+    const ul = $('card-lines'); ul.innerHTML = '';
+    c.lines.forEach((line) => {
+      const li = document.createElement('li');
+      let text = line;
+      if (line.startsWith('○ ')) { li.className = 'say'; text = line.slice(2); }
+      else if (line.startsWith('✕ ')) { li.className = 'avoid'; text = line.slice(2); }
+      else if (line.startsWith('□ ')) { li.className = 'box'; text = line.slice(2); }
+      li.textContent = text; ul.appendChild(li);
+    });
+    const qa = $('card-qa'); qa.innerHTML = ''; qa.hidden = !c.confirm;
+    if (c.confirm) {
+      [['yes', '예', 'btn yes'], ['no', '아니요', 'btn']].forEach(([v, label, cls]) => {
+        const b = document.createElement('button'); b.type = 'button'; b.className = cls; b.textContent = label;
+        b.addEventListener('click', () => { setConfirm(v, true); });
+        qa.appendChild(b);
+      });
+    }
+    $('tts').textContent = c.tts;
+    [...$('steps').children].forEach((b, k) => b.setAttribute('aria-current', k === state.idx ? 'step' : 'false'));
+    if (!state.playing) setClock(c.at);
+  }
+  function renderSteps() {
+    const nav = $('steps'); nav.innerHTML = '';
+    state.out.flow.cards.forEach((c, k) => {
+      const b = document.createElement('button'); b.type = 'button';
+      b.innerHTML = `<span></span><span class="t num"></span>`;
+      b.children[0].textContent = c.confirm ? '확인' : KIND_KO[c.kind]; b.children[1].textContent = `${c.at}초`;
+      b.addEventListener('click', () => { stop(); state.idx = k; renderCard(); speak(c.tts); });
+      nav.appendChild(b);
+    });
+  }
+  function renderChips() {
+    const [label, cls] = MODE_KO[state.out.flow.mode];
+    const m = $('chip-mode'); m.className = `chip ${cls}`; m.children[1].textContent = label;
+  }
+
+  // ---------- 기록 차트 ----------
+  const X0 = -10000, X1 = 0;
+  const M = { l: 58, r: 14, t: 22, b: 8 };
+  function svgEl(tag, attrs, parent) { const e = document.createElementNS('http://www.w3.org/2000/svg', tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+  function xScale(w) { return (t) => M.l + ((t - X0) / (X1 - X0)) * (w - M.l - M.r); }
+  function niceMax(v, step) { return Math.max(step, Math.ceil(v / step) * step); }
+
+  function lineChart(host, { title, unit, data, yMin, yMax, ticks, zero, fmtTick }) {
+    const w = host.clientWidth || 600, h = 118;
+    host.innerHTML = '';
+    const svg = svgEl('svg', { width: w, height: h, viewBox: `0 0 ${w} ${h}`, role: 'img', 'aria-label': title }, host);
+    const x = xScale(w);
+    const y = (v) => M.t + (1 - (v - yMin) / (yMax - yMin)) * (h - M.t - M.b);
+    svgEl('text', { x: 0, y: 13, class: 'ttl' }, svg).textContent = `${title} (${unit})`;
+    ticks.forEach((v) => {
+      svgEl('line', { x1: M.l, x2: w - M.r, y1: y(v), y2: y(v), class: v === 0 && zero ? 'zero' : 'grid' }, svg);
+      svgEl('text', { x: M.l - 8, y: y(v) + 4, 'text-anchor': 'end' }, svg).textContent = fmtTick ? fmtTick(v) : v;
+    });
+    const pts = data.map((d) => `${x(d.t).toFixed(1)},${y(d.v).toFixed(1)}`);
+    const base = zero ? y(0) : y(yMin);
+    svgEl('path', { d: `M${x(data[0].t)},${base} L${pts.join(' L')} L${x(data[data.length - 1].t)},${base} Z`, fill: 'var(--vehicle)', opacity: '.14' }, svg);
+    svgEl('path', { d: `M${pts.join(' L')}`, fill: 'none', stroke: 'var(--vehicle)', 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
+    const end = data[data.length - 1];
+    svgEl('circle', { cx: x(end.t), cy: y(end.v), r: 4, fill: 'var(--vehicle)', stroke: 'var(--panel)', 'stroke-width': 2 }, svg);
+    svgEl('line', { x1: x(0), x2: x(0), y1: M.t - 4, y2: h - M.b, class: 'crash' }, svg);
+    return { svg, x, w, h };
+  }
+
+  function intervals(frames, pred) {
+    const out = []; let cur = null;
+    frames.forEach((f) => { if (pred(f)) { if (!cur) cur = { a: f.t, b: f.t }; else cur.b = f.t; } else if (cur) { out.push(cur); cur = null; } });
+    if (cur) out.push(cur);
+    return out;
+  }
+
+  function eventChart(host, frames, metrics) {
+    const w = host.clientWidth || 600, rowH = 20, rows = 3, h = M.t + rows * rowH + 22;
+    host.innerHTML = '';
+    const svg = svgEl('svg', { width: w, height: h, viewBox: `0 0 ${w} ${h}`, role: 'img', 'aria-label': `차량 사건 기록: ${state.out.facts.vehicle.join('. ')}` }, host);
+    const x = xScale(w);
+    svgEl('text', { x: 0, y: 13, class: 'ttl' }, svg).textContent = '사건';
+    const lanes = [
+      { lab: '진로변경', color: 'var(--vehicle)', iv: ['detected', 'completed', 'starting'].includes(metrics.laneChange.status) && metrics.laneChange.startT != null ? [{ a: metrics.laneChange.startT, b: metrics.laneChange.endT == null ? 0 : metrics.laneChange.endT }] : [] },
+      { lab: '방향지시등', color: 'var(--signal)', iv: intervals(frames, (f) => f.turnSignal === 'LEFT' || f.turnSignal === 'RIGHT') },
+      { lab: '브레이크', color: 'var(--brake)', iv: intervals(frames, (f) => f.brake) },
+    ];
+    lanes.forEach((ln, i) => {
+      const yy = M.t + i * rowH;
+      svgEl('line', { x1: M.l, x2: w - M.r, y1: yy + rowH / 2, y2: yy + rowH / 2, class: 'grid' }, svg);
+      svgEl('text', { x: M.l - 8, y: yy + rowH / 2 + 4, 'text-anchor': 'end' }, svg).textContent = ln.lab;
+      ln.iv.forEach((iv) => {
+        const x0 = x(iv.a), x1 = Math.max(x(iv.b), x0 + 3);
+        svgEl('rect', { x: x0, y: yy + 4, width: x1 - x0, height: rowH - 8, rx: 3, fill: ln.color }, svg);
+      });
+      if (!ln.iv.length) svgEl('text', { x: M.l + 6, y: yy + rowH / 2 + 4 }, svg).textContent = '없음';
+    });
+    svgEl('line', { x1: x(0), x2: x(0), y1: M.t - 4, y2: M.t + rows * rowH, class: 'crash' }, svg);
+    for (let s = -10; s <= 0; s += 2) {
+      const t = svgEl('text', { x: x(s * 1000), y: h - 4, 'text-anchor': s === 0 ? 'end' : s === -10 ? 'start' : 'middle' }, svg);
+      t.textContent = s === 0 ? (w < 600 ? '0초' : `${state.out.metrics.impact.known ? '충돌' : '신고'} 0초`) : `${s}초`;
+    }
+    return { svg, x, w, h };
+  }
+
+  function renderCharts() {
+    const { metrics } = state.out;
+    $('rec-h').textContent = metrics.impact.known ? '충돌 전 10초 차량 기록' : '신고 전 10초 차량 기록 (충돌 순간은 감지 못 함)';
+    const frames = state.sc.frames;
+    const { series } = F.trace(frames);
+    const sMax = niceMax(Math.max(...frames.map((f) => f.speedKph)), 20);
+    const latMax = niceMax(Math.max(1, ...series.map((s) => Math.abs(s.lat))), 1);
+    const sp = lineChart($('ch-speed'), {
+      title: '속도', unit: 'km/h', data: frames.filter((f) => f.t <= 0).map((f) => ({ t: f.t, v: f.speedKph })),
+      yMin: 0, yMax: sMax, ticks: [0, sMax / 2, sMax],
+    });
+    const la = lineChart($('ch-lat'), {
+      title: '원래 차로에서 옆으로', unit: 'm', data: series.map((s) => ({ t: s.t, v: s.lat })),
+      yMin: -latMax, yMax: latMax, ticks: [-latMax, 0, latMax], zero: true, fmtTick: (v) => (v > 0 ? `+${v}` : `${v}`),
+    });
+    const ev = eventChart($('ch-events'), frames, metrics);
+    attachHover([sp, la, ev], frames, series);
+  }
+
+  function attachHover(charts, frames, series) {
+    const host = $('charts'), tip = $('tip');
+    const pre = frames.filter((f) => f.t <= 0);
+    const lines = charts.map((c) => svgEl('line', { x1: 0, x2: 0, y1: 0, y2: c.h, class: 'xhair', visibility: 'hidden' }, c.svg));
+    const sigKo = { LEFT: '왼쪽', RIGHT: '오른쪽', NONE: '꺼짐' };
+    function move(ev) {
+      const rect = charts[0].svg.getBoundingClientRect();
+      const px = ev.clientX - rect.left;
+      const w = charts[0].w;
+      const t = X0 + ((px - M.l) / (w - M.l - M.r)) * (X1 - X0);
+      if (t < X0 || t > X1) { hide(); return; }
+      let k = 0; for (let i = 0; i < pre.length; i++) if (Math.abs(pre[i].t - t) < Math.abs(pre[k].t - t)) k = i;
+      const f = pre[k], s = series[k];
+      const xx = charts[0].x(f.t);
+      lines.forEach((l) => { l.setAttribute('x1', xx); l.setAttribute('x2', xx); l.setAttribute('visibility', 'visible'); });
+      tip.hidden = false;
+      tip.textContent = `${(f.t / 1000).toFixed(1)}초 · 시속 ${Math.round(f.speedKph)}km · 옆 ${s.lat >= 0 ? '+' : ''}${s.lat.toFixed(1)}m · 깜빡이 ${sigKo[f.turnSignal] || '꺼짐'} · 브레이크 ${f.brake ? '밟음' : '안 밟음'}`;
+      const hostRect = host.getBoundingClientRect();
+      const half = Math.min(tip.offsetWidth, hostRect.width - 16) / 2;
+      const left = Math.min(Math.max(rect.left - hostRect.left + xx, half + 8), hostRect.width - half - 8);
+      tip.style.left = `${left}px`;
+      tip.style.top = `${rect.top - hostRect.top + 18}px`;
+    }
+    function hide() { tip.hidden = true; lines.forEach((l) => l.setAttribute('visibility', 'hidden')); }
+    charts.forEach((c) => {
+      c.svg.addEventListener('pointermove', move);
+      c.svg.addEventListener('pointerdown', move); // 터치: 누른 자리 값 보기
+      c.svg.addEventListener('pointerleave', hide);
+    });
+  }
+
+  function renderRecTable() {
+    const { pre, series } = F.trace(state.sc.frames);
+    const tbl = $('rec-table'); tbl.innerHTML = '';
+    tbl.innerHTML = '<thead><tr><th>시점</th><th class="num">속도</th><th class="num">옆 이동</th><th>방향지시등</th><th>브레이크</th></tr></thead><tbody></tbody>';
+    const sigKo = { LEFT: '왼쪽', RIGHT: '오른쪽', HAZARD: '비상등', NONE: '—' };
+    pre.forEach((f, i) => {
+      if (f.t % 1000 !== 0) return;
+      const tr = document.createElement('tr');
+      tr.innerHTML = '<td class="num"></td><td class="num"></td><td class="num"></td><td></td><td></td>';
+      tr.children[0].textContent = f.t === 0 ? '충돌' : `${f.t / 1000}초`;
+      tr.children[1].textContent = `${Math.round(f.speedKph)}km/h`;
+      const lat = series[i] ? series[i].lat : 0;
+      tr.children[2].textContent = `${lat >= 0 ? '+' : ''}${lat.toFixed(1)}m`;
+      tr.children[3].textContent = sigKo[f.turnSignal] || '—';
+      tr.children[4].textContent = f.brake ? '밟음' : '—';
+      tbl.tBodies[0].appendChild(tr);
+    });
+  }
+
+  // ---------- 판단 과정 ----------
+  function renderTrace() {
+    const { facts, judged, result, request, seal, judgeError } = state.out;
+    const ul = $('facts'); ul.innerHTML = '';
+    const add = (src, cls, text) => {
+      const li = document.createElement('li');
+      const s = document.createElement('span'); s.className = `src ${cls}`; s.textContent = src;
+      const t = document.createElement('span'); t.textContent = text;
+      li.append(s, t); ul.appendChild(li);
+    };
+    facts.vehicle.forEach((t) => add('차량', '', t));
+    facts.place.forEach((t) => add(t.startsWith('내비') ? '내비' : '장소', '', t.replace(/^내비게이션: /, '')));
+    add('진술', 'drv', facts.driverStatement);
+    if (facts.driverConfirmation) add('확인', 'drv', facts.driverConfirmation);
+
+    const jname = judgeError ? '오프라인 대체 판정기 (판정 모델 연결 실패)'
+      : judged.model === 'local-standin' ? '오프라인 대체 판정기' : `${judged.provider || 'TypeSafe'} ${judged.model || 'Jev'}`;
+    $('judge-sub').textContent = judged.model === 'local-standin' ? `${jname} · Jev와 같은 응답 형식, 규칙값` : jname;
+    $('judge-badge').innerHTML = `판정기 <b></b>`;
+    $('judge-badge').lastChild.textContent = jname;
+
+    const ch = judged.answers.chart;
+    const bars = $('bars'); bars.innerHTML = '';
+    Object.entries(ch.probabilities).sort((a, b) => b[1] - a[1]).forEach(([k, p]) => {
+      const d = document.createElement('div'); d.className = `bar${k === ch.choice ? ' chosen' : ''}`;
+      d.innerHTML = '<span class="lbl"></span><span class="v num"></span><span class="track"><span class="fill"></span></span>';
+      d.querySelector('.lbl').textContent = OPT_KO[k] || k;
+      d.querySelector('.v').textContent = `${Math.round(p * 100)}%`;
+      d.querySelector('.fill').style.width = `${Math.max(1, p * 100)}%`;
+      bars.appendChild(d);
+    });
+    const nouls = $('nouls'); nouls.innerHTML = '';
+    Object.entries(NOUL_KO).forEach(([k, lab]) => {
+      const a = judged.answers[k]; if (!a) return;
+      const d = document.createElement('div'); d.className = 'noul';
+      d.innerHTML = '<span></span><span class="v num"></span>';
+      d.children[0].textContent = lab; d.children[1].textContent = a.noul.toFixed(2);
+      nouls.appendChild(d);
+    });
+
+    const box = $('result'); box.innerHTML = '';
+    if (result.status === 'estimate') {
+      const big = document.createElement('div'); big.className = 'result-big num';
+      big.textContent = result.low === result.high ? `${result.likely}%` : `${result.low}~${result.high}%`;
+      const sm = document.createElement('small'); sm.textContent = result.low === result.high ? ' 내 과실' : `  가능성 높은 값 ${result.likely}%`;
+      big.appendChild(sm); box.appendChild(big);
+      const meta = document.createElement('p'); meta.className = 'sub';
+      meta.textContent = `${result.optionLabel} · 기본 내 과실 ${result.base}% · 유형 확률 ${Math.round(result.confidence * 100)}%${result.verified ? '' : ' · 가감 요소 미반영'}`;
+      box.appendChild(meta);
+      if (result.modifiers.length) {
+        const wrap = document.createElement('div'); wrap.className = 'scroll-x';
+        const tbl = document.createElement('table'); tbl.className = 'mods';
+        tbl.innerHTML = '<thead><tr><th>가감 요소</th><th>근거</th><th class="num">내 과실</th><th>결정</th></tr></thead><tbody></tbody>';
+        const order = { applied: 0, possible: 1, not_applied: 2, not_assessed: 3 };
+        [...result.modifiers].sort((a, b) => order[a.decision] - order[b.decision]).forEach((e) => {
+          const tr = document.createElement('tr');
+          tr.innerHTML = '<td></td><td></td><td class="num"></td><td><span class="dec"><i></i><span></span></span></td>';
+          tr.children[0].textContent = e.label;
+          tr.children[1].textContent = e.source ? `${srcKo(e)}${e.p != null ? ` ${e.p.toFixed(2)}` : ''}` : '—';
+          tr.title = e.why || '';
+          tr.children[2].textContent = `${e.effectOnMe > 0 ? '+' : ''}${e.effectOnMe}`;
+          const dec = tr.querySelector('.dec'); dec.classList.add(e.decision); dec.lastChild.textContent = DEC_KO[e.decision];
+          tbl.tBodies[0].appendChild(tr);
+        });
+        wrap.appendChild(tbl); box.appendChild(wrap);
+      }
+      result.caveats.forEach((c) => { const p = document.createElement('p'); p.className = 'sub'; p.textContent = c; box.appendChild(p); });
+      if (result.alternative) { const p = document.createElement('p'); p.className = 'sub'; p.textContent = `다른 해석 가능성: ${result.alternative.title} ${Math.round(result.alternative.p * 100)}%`; box.appendChild(p); }
+    } else {
+      const big = document.createElement('div'); big.className = 'result-big'; big.textContent = result.confirm ? '운전자 확인 대기' : '판단 보류';
+      box.appendChild(big);
+      if (result.confirm) { const q = document.createElement('p'); q.className = 'sub'; q.textContent = `앱의 질문: “${result.confirm.question}” — 위 조작부나 차량 화면에서 답해 보세요`; box.appendChild(q); }
+      result.reasons.forEach((r) => { const p = document.createElement('p'); p.className = 'sub'; p.textContent = r; box.appendChild(p); });
+      const ul2 = document.createElement('ul'); ul2.className = 'facts';
+      result.evidenceChecklist.forEach((x) => { const li = document.createElement('li'); li.textContent = `□ ${x}`; li.style.display = 'block'; ul2.appendChild(li); });
+      box.appendChild(ul2);
+    }
+    $('req').textContent = JSON.stringify(request, null, 2);
+    $('hash').textContent = seal ? seal.hash : '봉인 실패';
+    renderRecTable();
+  }
+
+  $('copy-hash').addEventListener('click', () => {
+    const text = $('hash').textContent;
+    const done = () => { $('copy-hash').textContent = '복사됨'; setTimeout(() => { $('copy-hash').textContent = '지문 복사'; }, 1400); };
+    const fallback = () => { const r = document.createRange(); r.selectNodeContents($('hash')); const s = window.getSelection(); s.removeAllRanges(); s.addRange(r); };
+    try { navigator.clipboard.writeText(text).then(done, fallback); } catch (e) { fallback(); }
+  });
+
+  function renderAll() {
+    renderSteps(); renderChips(); renderCard(); renderCharts(); renderTrace();
+    $('confirm-lab').textContent = `“${F.confirmQuestion(state.out.metrics.laneChange.direction)}”에 대한 답`;
+  }
+  let rz = 0;
+  new ResizeObserver(() => { cancelAnimationFrame(rz); rz = requestAnimationFrame(() => state.out && renderCharts()); }).observe($('charts'));
+
+  loadScenario(F.SCENARIOS[0].id);
+})();
+</script>
