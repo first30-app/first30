@@ -34,6 +34,10 @@ android {
     buildFeatures {
         compose = true
     }
+
+    testOptions {
+        unitTests.all { it.useJUnitPlatform() }
+    }
 }
 
 kotlin {
@@ -50,4 +54,15 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     debugImplementation(libs.androidx.compose.ui.tooling)
+
+    // signals / incident layer
+    implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.kotlinx.serialization.json) // JsonElement only (seal files), no compiler plugin
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
+
+    testImplementation(platform(libs.junit.bom))
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
+    testImplementation(libs.kotlinx.coroutines.test)
 }

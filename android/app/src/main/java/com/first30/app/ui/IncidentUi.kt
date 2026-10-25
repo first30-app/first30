@@ -1,0 +1,111 @@
+package com.first30.app.ui
+
+import com.first30.core.engine.Card
+import com.first30.core.engine.RunOutput
+
+/**
+ * 차량 화면이 그리는 값. 엔진의 [RunOutput] 에서 화면에 필요한 것만 옮긴다(데모 demo/src.html `renderCard`·`renderSteps`·`renderChips`).
+ * 문구는 엔진 카드 그대로 쓴다 — 고지문·증거 체크리스트·말하기 목록은 카드 `lines` 안에 이미 있다.
+ */
+data class IncidentUi(
+    /** 'urban' | 'highway' | 'caution' | 'emergency' (flow.mode). */
+    val mode: String,
+    val modeLabel: String,
+    val modeTone: Tone,
+    /** 봉인 성공 여부와 지문 앞 12자. */
+    val sealed: Boolean,
+    val sealHashShort: String?,
+    /** flow 순서 그대로(긴급 모드: 안전 → 봉인 → 구조 → 다음 → 과실). */
+    val cards: List<CardUi>,
+    /** 세션 시작 시각(타임라인 0초). */
+    val startedAtMs: Long,
+    /** 확인 질문 답: true 예 / false 아니요 / null 아직. */
+    val answer: Boolean?,
+) {
+    /** 빠른 도로 모드 — 질문은 화면에만(소리 내어 묻지 않음, 카드 tts 가 이미 그렇게 돼 있다). */
+    val fastRoad: Boolean get() = mode == "highway" || mode == "caution"
+
+    /** [elapsedSec] 초에 보여 줄 카드 번호(`at` 이 지난 마지막 카드). */
+    fun activeIndexAt(elapsedSec: Double): Int {
+        var i = 0
+        cards.forEachIndexed { k, c -> if (elapsedSec >= c.atSec) i = k }
+        return i
+    }
+
+    companion object {
+        const val TOTAL_SEC = 30
+    }
+}
+
+enum class Tone { NEUTRAL, OK, WARN, CRIT }
+
+data class CardUi(
+    val index: Int,
+    /** 엔진 kind: safety | evidence | estimate | abstain | speech | next | rescue. */
+    val kind: String,
+    /** 단계 표시: 안전·봉인·과실·말하기·다음·구조, 확인 질문 카드는 '확인'. */
+    val stepLabel: String,
+    val atSec: Int,
+    val title: String,
+    val lines: List<LineUi>,
+    /** 읽는 문장(= 자막). */
+    val tts: String,
+    val confirm: ConfirmUi?,
+) {
+    /** "03 · 과실 · 10초" */
+    val header: String get() = "${(index + 1).toString().padStart(2, '0')} · $stepLabel · ${atSec}초"
+}
+
+data class LineUi(val text: String, val style: LineStyle)
+
+/** 데모의 li 클래스: ○ 할 말(say) / ✕ 피할 말(avoid) / □ 증거 체크리스트(box) / 그 밖(plain). */
+enum class LineStyle { PLAIN, SAY, AVOID, BOX }
+
+data class ConfirmUi(val question: String, val hint: String?, val direction: String?)
+
+private val KIND_KO = mapOf(
+    "safety" to "안전", "evidence" to "봉인", "estimate" to "과실", "abstain" to "과실",
+    "speech" to "말하기", "next" to "다음", "rescue" to "구조",
+)
+
+private val MODE_KO = mapOf(
+    "urban" to ("일반도로 안내" to Tone.NEUTRAL),
+    "highway" to ("고속도로 · 비트박스" to Tone.WARN),
+    "caution" to ("빠른 도로일 수 있음 · 대피 먼저" to Tone.WARN),
+    "emergency" to ("긴급 · 사람 먼저" to Tone.CRIT),
+)
+
+private val DEFAULT_AT = listOf(0, 5, 10, 20, 25)
+
+fun lineUi(line: String): LineUi = when {
+    line.startsWith("○ ") -> LineUi(line.substring(2), LineStyle.SAY)
+    line.startsWith("✕ ") -> LineUi(line.substring(2), LineStyle.AVOID)
+    line.startsWith("□ ") -> LineUi(line.substring(2), LineStyle.BOX)
+    else -> LineUi(line, LineStyle.PLAIN)
+}
+
+fun cardUi(index: Int, c: Card): CardUi = CardUi(
+    index = index,
+    kind = c.kind,
+    stepLabel = if (c.confirm != null) "확인" else KIND_KO[c.kind] ?: c.kind,
+    atSec = c.at ?: DEFAULT_AT.getOrElse(index) { 25 },
+    title = c.title,
+    lines = c.lines.map(::lineUi),
+    tts = c.tts,
+    confirm = c.confirm?.let { ConfirmUi(it.question, it.hint?.takeIf { h -> h.isNotEmpty() }, it.direction) },
+)
+
+/** RunOutput → 화면 값. [answer] 는 ctx.laneChangeConfirmed. */
+fun RunOutput.toUi(startedAtMs: Long, answer: Boolean?): IncidentUi {
+    val (label, tone) = MODE_KO[flow.mode] ?: (flow.mode to Tone.NEUTRAL)
+    return IncidentUi(
+        mode = flow.mode,
+        modeLabel = label,
+        modeTone = tone,
+        sealed = seal != null,
+        sealHashShort = seal?.hash?.take(12),
+        cards = flow.cards.mapIndexed(::cardUi),
+        startedAtMs = startedAtMs,
+        answer = answer,
+    )
+}
