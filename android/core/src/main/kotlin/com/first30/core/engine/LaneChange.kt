@@ -37,6 +37,9 @@ data class LaneChange(
     var headingHeldSec: Double? = null,
     var keptLaneAfter: Boolean? = null,
     var oppositeMoveM: Double? = null,
+    /** engine.js 941행: detected 일 때만 키가 생긴다(값은 null 일 수 있음). [hasDirectionCaveat] = 키가 있는가. */
+    var hasDirectionCaveat: Boolean = false,
+    var directionCaveat: String? = null,
 ) {
     fun toJs(): Map<String, Any?> {
         val m = linkedMapOf<String, Any?>(
@@ -61,6 +64,7 @@ data class LaneChange(
         headingHeldSec?.let { m["headingHeldSec"] = it }
         keptLaneAfter?.let { m["keptLaneAfter"] = it }
         oppositeMoveM?.let { m["oppositeMoveM"] = it }
+        if (hasDirectionCaveat) m["directionCaveat"] = directionCaveat
         return m
     }
 }
@@ -305,4 +309,30 @@ internal fun classifyLaneChangeCore(
     lc.status = "detected"
     lc.detected = true
     return lc
+}
+
+/**
+ * engine.js 747행 `directionCaveat(pre, series, base, lc, quality)` — detected 움직임의 방향을 믿기 어려운 기록인가.
+ * 'opposite_signal' | 'opposite_move' | 'road_curve' | 'late_reference' | null.
+ */
+internal fun directionCaveat(pre: List<PFrame>, series: List<SPoint>, base: Baseline, lc: LaneChange, quality: Quality): String? {
+    val startT = lc.startT
+    val dir = lc.direction
+    if (lc.status != "detected" || dir == null || startT == null) return null
+    val last = pre[pre.size - 1]
+    val sgn = if (dir == "RIGHT") 1.0 else -1.0
+    val opp = if (sgn > 0) "LEFT" else "RIGHT"
+    if (quality.signalAvailable && pre.any { it.t >= startT - Thresh.RECENT_SIGNAL_SEC * 1000 && it.turnSignal == opp }) return "opposite_signal"
+    val atStart = series.filter { it.t >= last.t - Thresh.LOCAL_SEC * 1000 && it.t <= startT }
+    if (atStart.isNotEmpty()) {
+        val latS = atStart[atStart.size - 1].lat
+        // 757행 Math.max(0, ...) — 빈 펼침은 없다(atStart 가 비지 않음)
+        val oppLat = Math.max(0.0, jsMax(atStart.map { (it.lat - latS) * sgn }))
+        if (oppLat >= Thresh.LANE_LAT_M &&
+            steeringRun(series, -sgn, startT - 5000, startT, orElse(lc.steerThresholdDeg, Thresh.STEER_DEV_DEG)).ok
+        ) return "opposite_move"
+    }
+    if (base.curved) return "road_curve"
+    if (base.lateRef) return "late_reference"
+    return null
 }

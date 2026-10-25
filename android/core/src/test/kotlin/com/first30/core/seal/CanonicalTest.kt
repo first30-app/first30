@@ -33,7 +33,11 @@ class CanonicalTest {
             }
         }
         assertTrue(failures.isEmpty()) { "${failures.size} failures:\n" + failures.take(10).joinToString("\n") }
-        assertEquals(384, seals, "seal object count")
+        // dump-golden.js 가 확인한 봉인 수(index.json sealChecks.verified)와 같아야 한다 — 다시 만들어도 깨지지 않게
+        @Suppress("UNCHECKED_CAST")
+        val expected = ((Golden.index().raw["sealChecks"] as Map<String, Any?>)["verified"] as Double).toInt()
+        assertTrue(expected >= 384, "sealChecks.verified unexpectedly small: $expected")
+        assertEquals(expected, seals, "seal object count (index.json sealChecks.verified)")
     }
 
     /** test t051: sha256 over raw bytes matches the JS fallback results. */

@@ -186,6 +186,10 @@ fun analyzeWindow(frames: List<Frame?>?, ctxIn: Ctx?): WindowMetrics {
             laneChange = laneChange.copy(status = "uncertain", reason = "baseline_sensitive")
         }
     }
+    // 941행
+    if (laneChange.status == "detected") {
+        laneChange = laneChange.copy(hasDirectionCaveat = true, directionCaveat = directionCaveat(pre, series, base, laneChange, quality))
+    }
     val signal = analyzeSignal(pre, laneChange, roadType, quality)
 
     // 915행 브레이크
