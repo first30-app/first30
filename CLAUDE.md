@@ -5,14 +5,14 @@
 
 ## 지금 상태 (2026-10-25 기준)
 
-- `engine/` 판단 엔진(JavaScript, 의존성 없음). `npm test`(= `node --test test/engine.test.js`) 98개 통과.
+- `engine/` 판단 엔진(JavaScript, 의존성 없음). `npm test`(= `node --test test/engine.test.js`) 101개 통과.
   곡선 진입·곡선 끝·짧은 굽은 길·차로 어긋남·같은 쪽 신호를 켠 채 굽은 길·차선 안 흔들림·회피 조향·GPS 방향 잡음·방향 지연·2Hz 프레임·
   핸들 부호 반대·결측·깜빡임 신호·느린 고속도로 진로변경·트리거 종류(음성·버튼·급감속)·늦게 온 에어백 트리거·운전자 확인 질문·
-  진술 주어/부정/의도·빠른 도로 안전 안내·봉인 원본값 같은 경계 상황 테스트 포함.
-  여섯 차례 독립 검토를 거쳤다(잘못된 숫자보다 판단 보류가 낫다는 원칙). 남은 한계는 `docs/DESIGN.md` 7장.
-  6차 수정분(기록+답 일치 규칙, 회피 조향, 시작점 무릎, 신호 여유, 안전 안내 모드, 에어백 시각, 봉인)을 겨냥한 7차 검토는
-  사용량 한도로 중간에 멈췄다 — 합성 시험(정직한 답 약 1만 4천 건, 무작위 도로의 실제 진로변경 6천 건)은 통과했지만, Kotlin 이식 전에
-  독립 검토를 한 번 더 돌려 보길 권한다.
+  진술 주어/부정/의도·빠른 도로 안전 안내·봉인 원본값·곡률이 바뀌는 길에서 거꾸로 읽힌 방향 같은 경계 상황 테스트 포함.
+  일곱 차례 독립 검토를 거쳤다(잘못된 숫자보다 판단 보류가 낫다는 원칙). 7차 검토(6차 수정분 대상)는 확인된 결함 없이 끝났고,
+  제품 결정으로 보강 두 가지를 넣었다 — L1: 방향을 믿기 어려운 detected 는 신호 가산을 범위에만(`laneChange.directionCaveat`),
+  O3: detected 확인 질문에도 굽은 길 안내 `hint` 를 덧붙여 읽음. 남은 한계는 `docs/DESIGN.md` 7장.
+  `npm run golden` 은 Kotlin 이식용 고정 입출력(`android/core/src/test/resources/golden/`, `prepare.json` 포함)을 다시 만든다(결정적).
 - `scenarios/` 10Hz 차량 신호 합성기와 사고 시나리오 12종 (테스트·시연 공용). `synthFrames({ fromS: -20, ... })` 로 20초 기록도 만든다.
 - `demo/` 시연 화면. `node demo/build.js` → `demo/index.html`(브라우저로 바로 여는 단독 파일), `demo/artifact.html`(게시용 조각).
 - `submission/` 공식 접수양식을 채운 기획서 docx와 채우는 스크립트(docx는 개인정보가 있어 .gitignore 로 뺐다).
@@ -29,13 +29,17 @@
     굽은 길·차로 어긋남과 구분이 안 되기 때문이다. 진술 문장(`self_lane_change` Noul)으로는 B를 열지 않는다(부정·질문·남의 말 오독).
   - "상대 진로변경(A)": 기록상 차로 유지('none') + "아니요"(`false`). 곡선이 바뀌는 곳의 느린 진로변경이 차로 유지처럼 보일 수 있어서다.
     충돌 직전 3초 안에 내 방향지시등이 켜져 있었거나(`signal.recentOn`), 방향지시등 기록이 없거나, 진술에서 자기 진로변경을 말했으면(`self_lane_change` ≥ 0.6) 답과 관계없이 보류.
-  - 답이 없으면 `result.confirm = { question, direction, hint }` 과 함께 보류하고 안내 카드가 묻는다. 'starting' 이면 `hint`("피하려고 핸들을 꺾은 거라면 '아니요'")를 함께 보여 주고 읽는다.
+  - 답이 없으면 `result.confirm = { question, direction, hint }` 과 함께 보류하고 안내 카드가 묻는다. `hint` 를 함께 보여 주고 읽는다 — 'starting' 이면 "피하려고 핸들을 꺾은 거라면 '아니요'", 'detected' 이면
+    "굽은 길이나 차로를 따라 달린 거라면 '아니요'"(음성은 "… 예 또는 아니요로 답해 주세요. …거라면 아니요예요.", 빠른 도로에서는 화면에만).
     'starting' 에서 "예"면 B로 계산하되 신호 가산은 늘 범위에만. 그 무렵 브레이크를 밟았으면(`laneChange.reason === 'evasive'`) 묻지 않고 보류.
 - 'none' 은 진행 방향이 차로를 지킨 것처럼 보여도 핸들이 도로를 따라가는 각도에서 크게·오래 벗어나 있으면(곡선 끝의 같은 쪽 진로변경 등)
   `uncertain/steer_activity` 로 낮춘다. 곡선 맞춤이 충돌 2초 전 무렵까지 이어지지 않으면 곡선 뒤 곧은 구간에서 기준을 다시 잡고,
   없으면 `uncertain/road_change`. 진행 방향이 핸들보다 1.3초 넘게 늦으면(`quality.headingLagSec`) 그 사이 핸들이 움직였을 때 `uncertain/heading_lag`
   (잰 지연은 신호 선행 거리 여유에도 더한다). 'starting' 은 핸들 기록이 있어야 하고, 반대쪽 진로변경을 마무리하는 움직임으로 보이면 `uncertain/opposite_pair`.
 - 방향지시등: 시작 무렵(시작 시점 오차 안)에 켰거나, 기록이 없거나(`unavailable`), 켠 시점이 기록 밖이면(`indeterminate`) +10은 범위에만.
+  'detected' 라도 움직인 방향을 믿기 어려우면(`laneChange.directionCaveat`: 시작 3초 전~충돌 사이 반대쪽 방향지시등 'opposite_signal' /
+  시작 앞 반대쪽 0.9m 이상 옆 이동 + 반대쪽 핸들 조작 'opposite_move' / 곡선 맞춤 기준 'road_curve' / 충돌 무렵 기준 'late_reference')
+  "반영"을 범위에만 낮춘다(곡률이 바뀌는 길에서 방향이 거꾸로 읽히고 운전자가 방향을 듣지 않고 "예"라고 한 경우 대비). DESIGN.md 3.2.
 - 에어백 트리거가 늦게 오면 트리거까지 이어진 에어백 켜짐 구간의 시작을 충돌 순간으로 다시 맞춘다(앞쪽으로만, 15초 안, `impact.anchoredMs`).
   그 구간이 기록 첫머리부터 켜져 있었으면 `impact.known = false`(`reason: 'airbag_before_buffer'`).
 - 안내 모드 `flow.mode`: 'urban'(내비 일반도로 + 최근 최고 시속 65km 이하) | 'highway'(내비 고속도로, 또는 도로 모름 + 시속 80km 이상)
@@ -50,7 +54,7 @@
    - 권한 선언: https://document.pleos.ai/docs/pleos-only/connect-sdk-pleos/Vehicle/vehicle-permission (쓰는 API의 최소 권한만)
 2. 엔진 이식: `engine/engine.js` 의 `prepare → analyzeWindow → renderFacts → buildJevRequest → computeFault → companion → sealEvidence`
    (+ `local-judge.js`, `jev-client.js` 의 응답 검증)를 Kotlin `core` 패키지로 옮긴다.
-   **JS 테스트 98개의 입력·기대값을 그대로 JUnit 테스트로 옮겨 같은 결과가 나오는지 먼저 맞춘다.**
+   **JS 테스트 101개의 입력·기대값을 그대로 JUnit 테스트로 옮겨 같은 결과가 나오는지 먼저 맞춘다.**
    (`scenarios/scenarios.js` 의 합성 공식을 그대로 쓰면 프레임이 같아진다.) 설계와 문턱값은 `docs/DESIGN.md` 3장.
 3. 신호 수집기(10Hz 링버퍼, **최근 20초** — 고속에서 느린 진로변경까지 가리려면 14초 이상이 필요하다. 엔진은 받은 버퍼 전체를 쓴다).
    엔진 입력 `ctx`: `trigger`('airbag'|'impact'|'decel'|'voice'|'button'), `roadType`('urban'|'highway'), `navCautions`, `driverStatement`,

@@ -14,6 +14,12 @@
 //                           output for ctx as given / laneChangeConfirmed:true / :false / key removed (now fixed, F.localJudge).
 //   synth.json              F.synthFrames(opts) outputs for scenario specs (fromS -10 and -20) and extra option sets.
 //   frames/<id>.json        deduplicated frame arrays (see "$frames" below).
+//   prepare.json            F.prepare(frames) for every frame array: { note, entries: { <id>: { source, result } | { source, threw } } }.
+//                           Keys are the same ids as frames/<id>.json (source "frames" — every id in frames/, whatever produced
+//                           it). Frame-array args of recorded analyzeWindow / run calls that were too short (< 10 rows) to be
+//                           deduplicated are added too, keyed by the same id formula (source "inline"; the array itself is the
+//                           call's args[0] in the test file). The input is the encoded snapshot decoded back to JS values.
+//                           prepare results are written WITHOUT "$frames" deduplication — result.pre is spelled out in full.
 //   FORMAT.md               this description, longer.
 //
 // Value encoding (JSON with tags; a tag object always has exactly one key starting with '$'):
@@ -59,7 +65,7 @@ const hazards = { nan: 0, inf: 0, negZero: 0, undef: 0 };
 
 function isPlain(o) { const p = Object.getPrototypeOf(o); return p === Object.prototype || p === null; }
 
-function enc(v, stack = []) {
+function enc(v, stack = [], noFrames = false) {
   if (v === undefined) { hazards.undef++; return { $undef: true }; }
   if (v === null) return null;
   switch (typeof v) {
@@ -81,8 +87,8 @@ function enc(v, stack = []) {
   const st = stack.concat([v]);
   if (Array.isArray(v)) {
     const arr = [];
-    for (let i = 0; i < v.length; i++) arr.push(enc(v[i], st));
-    if (arr.length >= 10 && arr.every((f) => f && typeof f === 'object' && !Array.isArray(f) && typeof f.t === 'number' && !Object.keys(f).some((k) => k[0] === '$'))) {
+    for (let i = 0; i < v.length; i++) arr.push(enc(v[i], st, noFrames));
+    if (!noFrames && arr.length >= 10 && arr.every((f) => f && typeof f === 'object' && !Array.isArray(f) && typeof f.t === 'number' && !Object.keys(f).some((k) => k[0] === '$'))) {
       const s = JSON.stringify(arr);
       const id = sha256(s).slice(0, 16);
       frameStore.set(id, arr);
@@ -97,8 +103,24 @@ function enc(v, stack = []) {
   const o = {};
   for (const k of Object.keys(v)) {
     if (k[0] === '$') throw new Error('data key starts with $: ' + k);
-    o[k] = enc(v[k], st);
+    o[k] = enc(v[k], st, noFrames);
   }
+  return o;
+}
+
+// encoded value -> JS value (inverse of enc for the tags that can appear in frames)
+function dec(v) {
+  if (v === null || typeof v !== 'object') return v;
+  if (Array.isArray(v)) return v.map(dec);
+  if ('$undef' in v) return undefined;
+  if ('$num' in v) return { NaN, Infinity, '-Infinity': -Infinity, '-0': -0 }[v.$num];
+  if ('$frames' in v) return dec(frameStore.get(v.$frames));
+  if ('$error' in v) return new Error(v.$error);
+  if ('$u8' in v) return Uint8Array.from(Buffer.from(v.$u8, 'hex'));
+  if ('$bigint' in v) return BigInt(v.$bigint);
+  if ('$fn' in v) throw new Error('cannot decode function value');
+  const o = {};
+  for (const k of Object.keys(v)) o[k] = dec(v[k]);
   return o;
 }
 
@@ -258,6 +280,26 @@ const FORMAT_MD = (() => {
     }
     for (const s of scenarioFiles) { writeJson(s.file, s.doc); index.scenarios.push({ id: s.id, title: s.title, file: s.file }); }
     writeJson('synth.json', { entries: synth });
+    // prepare.json: every deduplicated frame array, plus short frame-array args of recorded analyzeWindow / run calls
+    const prepInputs = new Map(); // id -> { source, encoded }
+    for (const id of frameStore.keys()) prepInputs.set(id, { source: 'frames', encoded: frameStore.get(id) });
+    for (const rec of tests) {
+      for (const c of rec.calls) {
+        if (c.fn !== 'analyzeWindow' && c.fn !== 'run') continue;
+        const a0 = c.args && c.args[0];
+        if (!Array.isArray(a0)) continue; // {"$frames"} is already covered; null / non-array inputs have nothing to prepare
+        const id = sha256(JSON.stringify(a0)).slice(0, 16);
+        if (!prepInputs.has(id)) prepInputs.set(id, { source: 'inline', encoded: a0 });
+      }
+    }
+    const prepEntries = {};
+    for (const id of [...prepInputs.keys()].sort()) {
+      const { source, encoded } = prepInputs.get(id);
+      try { prepEntries[id] = { source, result: enc(realFns.prepare(dec(encoded)), [], true) }; }
+      catch (e) { prepEntries[id] = { source, threw: { $error: String((e && e.message) || e) } }; }
+    }
+    writeJson('prepare.json', { note: 'F.prepare(frames) keyed by frame id (frames/<id>.json, or source "inline" for short call args)', entries: prepEntries });
+    index.prepare = { file: 'prepare.json', entries: Object.keys(prepEntries).length, inline: Object.values(prepEntries).filter((e) => e.source === 'inline').length };
     for (const id of [...frameStore.keys()].sort()) { writeJson(`frames/${id}.json`, frameStore.get(id)); index.frames.push(id); }
     index.sealChecks = { verified: sealChecks.ok, mismatched: sealChecks.bad.length };
     index.hazardCounts = hazards;
@@ -266,7 +308,7 @@ const FORMAT_MD = (() => {
 
     const failed = tests.filter((t) => t.status !== 'pass');
     const empty = tests.filter((t) => t.calls.length === 0);
-    process.stderr.write(`\n[golden] ${tests.length} tests (${failed.length} not passing), ${scenarioFiles.length} scenarios, ${synth.length} synth entries, ${frameStore.size} frame sets\n`);
+    process.stderr.write(`\n[golden] ${tests.length} tests (${failed.length} not passing), ${scenarioFiles.length} scenarios, ${synth.length} synth entries, ${frameStore.size} frame sets, ${index.prepare.entries} prepare entries (${index.prepare.inline} inline)\n`);
     process.stderr.write(`[golden] seal checks: ${sealChecks.ok} ok, ${sealChecks.bad.length} mismatched; hazards ${JSON.stringify(hazards)}\n`);
     if (empty.length) process.stderr.write(`[golden] tests with no F.* calls: ${empty.map((t) => t.index + ' ' + t.name).join(' | ')}\n`);
     if (failed.length || sealChecks.bad.length) process.exitCode = 1;

@@ -797,8 +797,8 @@ test('"내 차 진로변경"은 운전자 확인이 있어야 숫자가 나온�
   assert.equal(no.result.confirm, null);
   assert.ok(no.result.reasons.some((r) => /"아니요"라고 답했음/.test(r)), no.result.reasons.join(' / '));
   assert.equal(no.request.state.driver_confirmation, '운전자 확인 답변: "그때 오른쪽 차로로 진로를 바꾸던 중이었나요?"에 "아니요"');
-  // 질문은 기록 내용을 앞세우지 않고 그대로 묻는다 (유도 질문 방지)
-  assert.equal(card.tts, '그때 오른쪽 차로로 진로를 바꾸던 중이었나요? 예 또는 아니요로 답해 주세요.');
+  // 질문은 기록 내용을 앞세우지 않고 그대로 묻는다 (유도 질문 방지). 굽은 길을 따라간 경우의 답만 덧붙여 질문의 뜻을 분명히 한다.
+  assert.equal(card.tts, '그때 오른쪽 차로로 진로를 바꾸던 중이었나요? 예 또는 아니요로 답해 주세요. 굽은 길이나 차로를 따라 달린 거라면 아니요예요.');
   // 고속도로에서는 대피가 먼저 — 질문은 대피 뒤로 미룬다
   const hw = F.SCENARIOS.find((s) => s.id === 'highway_late_signal');
   const hwAsk = await runLocal(hw.frames, { ...hw.ctx, laneChangeConfirmed: undefined, driverStatement: '' });
@@ -1171,4 +1171,88 @@ test('ctx 가 null 이어도 안전 안내와 봉인은 나오고, 같은 시각
   const b = await F.sealEvidence([...dup].reverse(), m, { ...sc.ctx, now: fixedNow });
   assert.equal(a.hash, b.hash);
   assert.equal(F.analyzeWindow([...dup].reverse(), sc.ctx).laneChange.startT, m.laneChange.startT);
+});
+
+// ---------- 7차 검토 보강 (L1·O3) ----------
+// 검토 재현: 시속 118km, 왼쪽 진로변경(충돌 4.5초 전부터 4초)과 함께 충돌 4.1~2.9초 전 오른쪽으로 굽기 시작하는 길(반경 1500m), 신호 없음
+// → 기록은 "오른쪽" 움직임(detected)으로 읽힌다. 방향을 듣지 않고 "예"라고 하면 예전에는 신호 가산이 확정돼 80%로 나왔다.
+const flipRampK = (t) => (t <= -4.0559 ? 0 : t >= -2.941 ? 1 / 1500 : (t + 4.0559) / (4.0559 - 2.941) / 1500);
+const flipLC = { startS: -4.4889, durS: 3.9895, dir: 'LEFT' };
+
+test('곡률이 바뀌는 길에서 방향을 거꾸로 읽은 움직임은 "예"라고 해도 신호 가산을 확정하지 않는다 (검토 재현)', async () => {
+  const fr = physDrive({ kph: 118, fromS: -14, lc: flipLC, roadK: flipRampK });
+  const out = await runLocal(fr, confirmed(highway('')));
+  const lc = out.metrics.laneChange;
+  assert.deepEqual([lc.status, lc.direction], ['detected', 'RIGHT']); // 실제는 왼쪽 — 기록만으로는 가릴 수 없다
+  assert.equal(lc.directionCaveat, 'opposite_move');
+  assert.deepEqual([out.result.status, out.result.option], ['estimate', 'c252_me_B']);
+  const sig = out.result.modifiers.find((e) => e.id === 'B_signal');
+  assert.equal(sig.decision, 'possible');
+  assert.match(sig.why, /움직인 방향을 잘못 쟀을 수 있어 범위에만 반영/);
+  assert.deepEqual([out.result.low, out.result.high], [70, 80]); // 고정 80이 아니라 70을 포함한 범위
+  // 실제 방향(왼쪽)의 신호를 켜 두었으면: 예전에는 "오른쪽 신호 미점등"으로 +10 확정 → 이제 범위에만
+  const sigFr = physDrive({ kph: 118, fromS: -14, lc: flipLC, roadK: flipRampK, signal: { fromS: flipLC.startS - 3, dir: 'LEFT' } });
+  const o2 = await runLocal(sigFr, confirmed(highway('')));
+  assert.equal(o2.metrics.laneChange.directionCaveat, 'opposite_signal');
+  assert.equal(o2.result.modifiers.find((e) => e.id === 'B_signal').decision, 'possible');
+  assert.deepEqual([o2.result.low, o2.result.high], [70, 80]);
+  // 정직하게 "아니요"라고 하면 숫자 없음 (기존 규칙 그대로)
+  assert.equal((await runLocal(fr, keptLane(highway('')))).result.status, 'abstain');
+});
+
+test('도로 방향 기준이 곡선 맞춤이면 detected 의 신호 가산은 범위에만, 곧은 길의 진로변경은 그대로 확정', async () => {
+  // 반경 1500m 곡선을 시속 75km로 달리다 충돌 2.5초 전부터 오른쪽 진로변경, 신호 없음
+  const cv = await runLocal(physDrive({ kph: 75, roadK: () => 1 / 1500, lc: { startS: -2.5, durS: 5, dir: 'RIGHT' } }), confirmed(urban('')));
+  assert.equal(cv.metrics.road.curveCompensated, true);
+  assert.deepEqual([cv.metrics.laneChange.status, cv.metrics.laneChange.directionCaveat], ['detected', 'road_curve']);
+  const cvSig = cv.result.modifiers.find((e) => e.id === 'B_signal');
+  assert.equal(cvSig.decision, 'possible');
+  assert.match(cvSig.why, /굽은 길에서는 움직인 방향을 잘못 잴 수 있어 범위에만 반영/);
+  assert.deepEqual([cv.result.low, cv.result.high], [70, 80]);
+  // 대조: 곧은 길의 진로변경(신호 없음)은 고속도로·시내 모두 지금처럼 +10 확정 → 80
+  for (const [fr, ctx] of [
+    [physDrive({ kph: 118, fromS: -14, lc: { startS: -3.5, durS: 6, dir: 'RIGHT' } }), highway('')],
+    [physDrive({ kph: 60, lc: { startS: -3, durS: 5, dir: 'LEFT' } }), urban('')],
+  ]) {
+    const out = await runLocal(fr, confirmed(ctx));
+    assert.equal(out.metrics.laneChange.status, 'detected');
+    assert.equal(out.metrics.laneChange.directionCaveat, null);
+    assert.equal(out.result.modifiers.find((e) => e.id === 'B_signal').decision, 'applied');
+    assert.deepEqual([out.result.low, out.result.likely, out.result.high], [80, 80, 80]);
+  }
+  // 대조: 차선 안 흔들림이 있는 곧은 길 진로변경도 방향 경고를 켜지 않는다
+  const r = rng(77);
+  let seen = 0;
+  for (let i = 0; i < 120; i++) {
+    const kph = 40 + Math.round(r() * 80), D = 3.5 + r() * 4, startS = -(1.6 + r() * 3);
+    const fr = physDrive({ kph, lc: { startS, durS: D, dir: r() < 0.5 ? 'LEFT' : 'RIGHT' }, weave: { A: 0.1 + r() * 0.4, P: 3 + r() * 6, ph: r() * 6.28 } });
+    const m = F.analyzeWindow(fr, urban(''));
+    if (m.laneChange.status !== 'detected') continue;
+    seen++;
+    assert.equal(m.laneChange.directionCaveat, null, JSON.stringify({ kph, D, startS }));
+  }
+  assert.ok(seen >= 20, String(seen));
+});
+
+test('detected 확인 질문에도 굽은 길 안내를 덧붙여 읽고(뜻만 분명히, 예/아니요를 함께), 빠른 도로에서는 소리 내어 묻지 않는다', async () => {
+  const sc = F.SCENARIOS.find((s) => s.id === 'confirm_needed');
+  const ask = await runLocal(sc.frames, { ...sc.ctx, laneChangeConfirmed: undefined, roadType: 'urban', driverStatement: '' });
+  assert.equal(ask.metrics.laneChange.status, 'detected');
+  assert.equal(ask.result.confirm.hint, '굽은 길이나 차로를 따라 달린 거라면 "아니요"');
+  const card = ask.flow.cards.find((c) => c.confirm);
+  assert.ok(card.lines.includes('굽은 길이나 차로를 따라 달린 거라면 "아니요"라고 답해 주세요'), card.lines.join(' / '));
+  assert.match(card.tts, /예 또는 아니요로 답해 주세요\. 굽은 길이나 차로를 따라 달린 거라면 아니요예요\.$/);
+  assert.doesNotMatch(card.tts, /오른쪽으로 움직|기록/); // 기록 내용을 앞세우지 않는다
+  // starting 은 피하려는 조작 안내 (같은 형식)
+  const late = await runLocal(F.synthFrames({ speed: 50, laneChange: { startS: -1.0, durS: 4, dir: 'RIGHT' } }), urban(''));
+  assert.equal(late.result.confirm.hint, '피하려고 핸들을 꺾은 거라면 "아니요"');
+  assert.match(late.flow.cards.find((c) => c.confirm).tts, /예 또는 아니요로 답해 주세요\. 피하려고 핸들을 꺾은 거라면 아니요예요\.$/);
+  // 빠른 도로(고속도로·caution)에서는 질문도 안내도 소리 내지 않는다 (화면에만)
+  for (const ctx of [highway(''), { trigger: 'impact', navCautions: [], driverStatement: '' }]) {
+    const fast = await runLocal(physDrive({ kph: 118, fromS: -14, lc: { startS: -3.5, durS: 6, dir: 'RIGHT' } }), ctx);
+    const c = fast.flow.cards.find((x) => x.confirm);
+    assert.ok(c && c.lines.some((l) => /굽은 길이나 차로를 따라/.test(l)));
+    assert.doesNotMatch(c.tts, /답해 주세요|굽은 길|아니요/);
+    assert.ok(['highway', 'caution'].includes(fast.flow.mode));
+  }
 });

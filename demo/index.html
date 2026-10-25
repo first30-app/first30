@@ -1145,6 +1145,35 @@ window.First30 = window.First30 || {};
     return runs;
   }
 
+  // 진로변경 움직임(detected)의 "방향"을 믿기 어려운 기록인가. 판정(상태)은 바꾸지 않고, 방향에 기대는 내 신호 가산만
+  // 범위로 낮추는 데 쓴다(computeFault). 곡률이 바뀌는 길에서는 한쪽 진로변경이 반대쪽 움직임으로 읽힐 수 있는데,
+  // 그때 운전자가 방향을 듣지 않고 "예"라고 하면 실제 방향의 방향지시등을 "켜지 않음"으로 읽게 된다.
+  //  - 'opposite_signal': 움직임 시작 3초 전부터 충돌까지 반대쪽 방향지시등이 켜져 있었다 (실제로는 그쪽으로 움직였을 수 있다)
+  //  - 'opposite_move'  : 시작 바로 앞(충돌 전 8초 안)에 반대쪽으로 0.9m 넘게 옆 이동했고, 시작 전 5초 안에 반대쪽 핸들 조작이 있었다
+  //                       (그쪽 진로변경 뒤에 도로가 굽어 반대 방향 움직임처럼 보였을 수 있다)
+  //  - 'road_curve'     : 도로 방향 기준이 곡선 맞춤이다 (그 곡선을 충돌 시점까지 늘려 쓴다 — 곡률이 바뀌면 방향이 틀어진다)
+  //  - 'late_reference' : 기록 앞부분이 고르지 않아 도로 방향 기준을 충돌 무렵 구간에서 잡았다
+  // 곡선이 끝난 뒤의 곧은 구간에서 다시 잡은 기준(afterCurve)은 넣지 않는다 — 움직임 가까이의 곧은 기준이라 방향이 더 흔들리지 않고,
+  // 차선 안 흔들림만으로도 자주 켜진다(합성 시험: 흔들림 있는 곧은 길 진로변경 중 신호 가산이 확정되던 경우의 약 17%).
+  // 신호를 아예 켜지 않았으면 방향이 틀려도 "켜지 않음"은 그대로 맞으므로, 여기 없는 경우가 남아도 신호 판단이 틀리지는 않는다.
+  function directionCaveat(pre, series, base, lc, quality) {
+    if (lc.status !== 'detected' || !lc.direction || lc.startT == null) return null;
+    const last = pre[pre.length - 1];
+    const sgn = lc.direction === 'RIGHT' ? 1 : -1;
+    const opp = sgn > 0 ? 'LEFT' : 'RIGHT';
+    if (quality.signalAvailable && pre.some((f) => f.t >= lc.startT - THRESH.RECENT_SIGNAL_SEC * 1000 && f.turnSignal === opp)) return 'opposite_signal';
+    const atStart = series.filter((x) => x.t >= last.t - THRESH.LOCAL_SEC * 1000 && x.t <= lc.startT);
+    if (atStart.length) {
+      const latS = atStart[atStart.length - 1].lat;
+      // 옆 이동과 함께 반대쪽 핸들 조작(평소 흔들림을 넘는 문턱, 0.5초 이상)이 있어야 한다 — 차선 안 흔들림만으로는 낮추지 않는다
+      const oppLat = Math.max(0, ...atStart.map((x) => (x.lat - latS) * sgn));
+      if (oppLat >= THRESH.LANE_LAT_M && steeringRun(series, -sgn, lc.startT - 5000, lc.startT, lc.steerThresholdDeg || THRESH.STEER_DEV_DEG).ok) return 'opposite_move';
+    }
+    if (base.curved) return 'road_curve';
+    if (base.lateRef) return 'late_reference';
+    return null;
+  }
+
   function roadTypeOf(ctx) {
     return ctx.roadType === 'highway' || ctx.roadType === 'urban' ? ctx.roadType : 'unknown';
   }
@@ -1321,6 +1350,7 @@ window.First30 = window.First30 || {};
         laneChange = { ...laneChange, status: 'uncertain', reason: 'baseline_sensitive' };
       }
     }
+    if (laneChange.status === 'detected') laneChange = { ...laneChange, directionCaveat: directionCaveat(pre, series, base, laneChange, quality) };
     const signal = analyzeSignal(pre, laneChange, roadType, quality);
 
     // 브레이크: 충돌 직전 1.5초 안에 걸친 마지막 브레이크 구간
@@ -1631,7 +1661,7 @@ window.First30 = window.First30 || {};
       else if (!yes) {
         out.reason = `기록상 내 차가 ${DIR_KO[lc.direction]}으로 움직였지만, 굽은 길이나 차로가 어긋난 곳을 따라가도 기록이 똑같이 보여 운전자 확인이 필요함`;
         out.askable = true;
-        if (lc.status === 'starting') out.hint = '피하려고 핸들을 꺾은 거라면 "아니요"';
+        out.hint = confirmHint(lc);
       }
     } else if (opt.me === 'A') {
       if (yes) out.reason = `운전자는 "${q}"에 "예"라고 답했는데 기록상으로는 차로를 유지한 것으로 나와 서로 맞지 않음`;
@@ -1646,6 +1676,18 @@ window.First30 = window.First30 || {};
     }
     return out;
   }
+
+  // 확인 질문에 덧붙이는 말 (화면에 보이고 함께 읽는다). 질문의 뜻만 분명히 하고 어느 답도 권하지 않는다.
+  //  - starting: 충돌 직전에 시작한 움직임은 피하려는 조작과 구분이 안 된다
+  //  - detected: 굽은 길·차로가 어긋난 곳을 따라가도 기록이 똑같이 보인다
+  const confirmHint = (lc) => (lc.status === 'starting' ? '피하려고 핸들을 꺾은 거라면 "아니요"'
+    : lc.status === 'detected' ? '굽은 길이나 차로를 따라 달린 거라면 "아니요"' : null);
+  const DIRECTION_CAVEAT_KO = {
+    opposite_signal: '움직임과 반대쪽 방향지시등이 켜져 있어 움직인 방향을 잘못 쟀을 수 있어',
+    opposite_move: '바로 앞에 반대쪽으로 움직인 기록이 있어 움직인 방향을 잘못 쟀을 수 있어',
+    road_curve: '굽은 길에서는 움직인 방향을 잘못 잴 수 있어',
+    late_reference: '도로 방향 기준을 충돌 무렵 구간에서 잡아 움직인 방향을 잘못 잴 수 있어',
+  };
 
   const hasCaution = (ctx, list) => (ctx.navCautions || []).some((c) => list.includes(c));
   const IMPACT_UNKNOWN_REASON = '충돌 순간을 차가 직접 감지하지 못해(음성·버튼 신고) 과실 범위를 계산하지 않음 — 기록 속 움직임이 사고 전인지, 사고 뒤 갓길로 옮긴 것인지 가릴 수 없음';
@@ -1690,7 +1732,7 @@ window.First30 = window.First30 || {};
       const unanswered = ctx.laneChangeConfirmed !== true && ctx.laneChangeConfirmed !== false;
       const movement = ['detected', 'starting'].includes(lcNow.status) && !!lcNow.direction && lcNow.reason !== 'evasive';
       if (unanswered && movement && pOf('none') < 0.8) {
-        confirm = { question: confirmQuestion(lcNow.direction), direction: lcNow.direction, hint: lcNow.status === 'starting' ? '피하려고 핸들을 꺾은 거라면 "아니요"' : null };
+        confirm = { question: confirmQuestion(lcNow.direction), direction: lcNow.direction, hint: confirmHint(lcNow) };
       } else if (g.askable && !unresolved && F.CHART_OPTIONS[choice].me === 'A' && F.CHART_OPTIONS[choice].chart !== '252-2') {
         const hypo = { ...ctx, laneChangeConfirmed: false };
         if (!recordConflict(choice, m, hypo) && !driverCheck(choice, m, hypo, answers).reason) {
@@ -1740,6 +1782,10 @@ window.First30 = window.First30 || {};
             if (m.laneChange.status === 'starting') {
               p = 0.5;
               why += ' — 충돌 직전에 시작한 움직임이라 시작 시점을 정확히 잴 수 없어 범위에만 반영';
+            } else if (m.laneChange.status === 'detected' && m.laneChange.directionCaveat && p === 1) {
+              // 움직인 방향을 잘못 잴 수 있는 기록이면 "그쪽 신호를 켜지 않음"을 확정하지 않는다 → 범위에만
+              p = 0.5;
+              why += ` — ${DIRECTION_CAVEAT_KO[m.laneChange.directionCaveat] || '움직인 방향을 잘못 잴 수 있어'} 범위에만 반영`;
             }
           } else {
             source = 'model'; basis = ['statement'];
@@ -1976,7 +2022,7 @@ window.First30 = window.First30 || {};
         // 질문은 기록 내용을 앞세우지 않고 그대로 묻는다. 빠른 도로에서는 차로 돌아오게 하지 않는다.
         tts: quiet || (evacuate
           ? '과실 참고 정보는 화면에 남겨 둘게요. 지금은 대피한 곳에서 기다리고, 안전해진 뒤에 확인하세요.'
-          : `${result.confirm.question} ${hint ? '피하려고 핸들을 꺾은 거라면 아니요라고 답해 주세요.' : '예 또는 아니요로 답해 주세요.'}`),
+          : `${result.confirm.question} 예 또는 아니요로 답해 주세요.${hint ? ` ${hint.replace(/"/g, '')}예요.` : ''}`),
       };
     }
     return {
