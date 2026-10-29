@@ -27,6 +27,15 @@
   - release: `./gradlew :app:exportReleaseApk` → 서명된 APK(v1·v2·v3, R8 축소)를 `apk/<팀명>_퍼스트30_release.apk` 로 복사(팀명 = `gradle.properties` 의 `submission.teamName`, 아직 `팀명`).
     서명 키·비밀번호는 `android/keystore/`·`android/keystore.properties`(gitignore, 잃어버리면 같은 앱으로 업데이트 불가 — 따로 백업). 없으면 debug 키로 서명된다.
 
+## 클라우드 세션에서 작업할 때
+
+- 세션을 시작하면 먼저 `bash scripts/cloud-setup.sh` (JDK 17·Android SDK 설치, `android/local.properties`, 골든 픽스처 생성 — 이미 있으면 건너뜀).
+  끝나면 `export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64 ANDROID_HOME=/opt/android-sdk` 후 `cd android && ./gradlew :core:test :app:testDebugUnitTest`.
+  환경 설정의 setup script 칸에 이 스크립트 내용을 넣으면 매번 다시 설치하지 않는다. Android SDK 는 dl.google.com 에서 받으므로 네트워크를 Custom(+dl.google.com) 또는 Full 로.
+- 클라우드에 없는 것: 에뮬레이터(화면 확인·Pleos AVD는 Mac에서), 서명 키(release 는 debug 키로 서명됨 — 제출용 APK 는 Mac에서 `:app:exportReleaseApk`),
+  접수양식 docx(개인정보라 저장소에 없음 — 기획서 문장은 `submission/fill_form.py`, docx 생성은 Mac에서).
+- 저장소는 공개다(github.com/first30-app/first30). 개인정보·실명·키를 커밋하지 말 것. 커밋 작성자는 `First30 Team <noreply@first30.invalid>`.
+
 ## 판단 규칙 요약 (바꾸려면 DESIGN.md 3장과 테스트를 함께 고칠 것)
 
 - 숫자는 `ctx.trigger` 가 'airbag' 또는 'impact'(충격 감지)일 때만 낸다. 'voice'·'button'·'decel'·그 밖·미지정은 충돌 시각을 모르는 것으로 보고
