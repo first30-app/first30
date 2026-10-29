@@ -130,7 +130,7 @@ class PipelineTest {
             diff("${c.label} facts", out["facts"], renderFacts(JsInput.windowMetrics(obj(out["metrics"])), ctx(c.args.getOrNull(1))).toJs(), f)
         }
         fail(f, cs.size + n, "renderFacts (${cs.size} direct + $n run.facts)")
-        assertEquals(5, cs.size)
+        assertEquals(8, cs.size)
     }
 
     @Test
