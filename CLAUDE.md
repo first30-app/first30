@@ -68,6 +68,7 @@
 1. Android Studio 새 프로젝트 `android/` (Kotlin, minSdk 28, Gradle 8+, JDK 17). Pleos Connect 전용 AVD(Pleos_Connect_v2.1, Android 14)에서 구동.
    - 개발 환경 설정: https://document.pleos.ai/docs/connect/guide/getting-started/application-development/setup-connect-sdk-emulator
    - Vehicle SDK 연동(Maven 저장소·의존성): https://document.pleos.ai/docs/pleos-only/connect-sdk-pleos/Vehicle/project-setup
+     저장소 `https://nexus-playground.pleos.ai/repository/maven-releases/`(인증 없음), `ai.pleos.playground:Vehicle:2.3.2`. 확인한 사항 전체는 `docs/CONTEST.md` "Pleos SDK 확인 사항".
    - 권한 선언: https://document.pleos.ai/docs/pleos-only/connect-sdk-pleos/Vehicle/vehicle-permission (쓰는 API의 최소 권한만)
 2. 엔진 이식: `engine/engine.js` 의 `prepare → analyzeWindow → renderFacts → buildJevRequest → computeFault → companion → sealEvidence`
    (+ `local-judge.js`, `jev-client.js` 의 응답 검증)를 Kotlin `core` 패키지로 옮긴다.
@@ -80,13 +81,13 @@
    방향지시등은 문자열 'LEFT'/'RIGHT'/'NONE'(또는 'OFF')/'HAZARD' 로 바꿔 넣는다(숫자 enum 그대로 넣으면 "기록 없음" 처리).
    Vehicle SDK typed API 이름(문서 sitemap 에서 확인):
    - 방향지시등 `registerTurnSignalState` / `getCurrentTurnSignalState`
-   - 핸들 각도 `registerSteeringWheelAngle`
+   - 핸들 각도 `registerSteeringWheelAngle` — 문서상 **앞바퀴 조향각**(왼쪽 −). 엔진 문턱값은 핸들 회전각 기준이라 `PleosUnits.steeringWheelDeg`(조향비 15)로 바꿔 넣는다.
    - 브레이크 `registerBrakePedalStatus`
    - 에어백 전개 `registerSeatAirbagDeployed` / `hasSeatAirbagBeenDeployed` → 충돌 트리거 'airbag'
    - 좌석 착석 `registerSeatOccupancy` (동승자 분기)
    - 사용 흐름: check…Capabilities → getCurrent… → register…(listener, area) → unregister…(같은 listener·area) → `Vehicle.release()`
-   - **Vehicle SDK 목록에 차량 속도 API가 없다.** 속도는 AAOS `CarPropertyManager` `PERF_VEHICLE_SPEED`(권한 `android.car.permission.CAR_SPEED`)로 받고,
-     안 되면 FusedLocation 위치 변화로 계산한다. 10/28 온라인 설명회에서 확인할 것.
+   - **차량 속도**: `VehicleSpeedListener` 는 Vehicle 2.3.2에서 삭제됐고, 공식 FAQ대로 AAOS `CarPropertyManager` `PERF_VEHICLE_SPEED`(m/s → `PleosUnits.speedKph`)로 받는다.
+     권한(`android.car.permission.CAR_SPEED` / `pleos.car.permission.CAR_SPEED`)과 에뮬레이터에서 값을 바꾸는 방법은 AVD에서 확인(Virtual Console에 속도 카드 없음).
    - FusedLocation: `registerFusedLocationCallback` (lat/lon/heading/altitude/confidence/timestamp — speed 필드 없음).
      **갱신 주기와 지도 맞춤 여부를 AVD에서 확인할 것** — 1Hz 수준일 수 있고, 방향이 도로에 맞춰진(map-matched) 값이면 진로변경이 보이지 않는다.
      링버퍼는 10Hz로 돌리고 방향은 마지막 값을 유지한다.
@@ -96,7 +97,8 @@
    - TextToSpeech: 카드별 `tts` 문장 읽기
 4. 충돌 트리거: 에어백 전개('airbag') / **충격 감지('impact')** / 음성 "사고 났어"('voice') / 화면 버튼('button').
    **경미한 접촉은 에어백이 터지지 않으므로 충격 감지가 관건이다.** 머리 장치 가속도 센서(Android `SensorManager` `TYPE_ACCELEROMETER`)로
-   접촉 충격(짧은 큰 가속도 변화)을 감지할 수 있는지 AVD·실차·설명회에서 먼저 확인할 것. 감지하면 그 시각을 t=0 으로 프레임을 맞춰
+   접촉 충격(짧은 큰 가속도 변화)을 감지할 수 있는지 AVD·실차에서 먼저 확인할 것(개발 문서에 사용 가능 기록이 없고 "센서 직접 접근 금지" 문구가 있다.
+   에뮬레이터 Virtual Console 에는 에어백 카드도 없어서 AVD 시연에서 숫자가 나오는 트리거를 만들 방법이 아직 없다). 감지하면 그 시각을 t=0 으로 프레임을 맞춰
    `trigger: 'impact'` 로 넘긴다. 급감속만으로는 충돌 시각이 아니므로 'decel' 은 숫자를 내지 않는다(사고 확인 질문의 계기로만 쓴다).
 5. 화면: `demo/src.html` 의 차량 화면(5단계 카드 + 30초 링 + 자막 + 확인 질문 예/아니요 버튼)을 Compose로 옮긴다.
    `flow.cards[i].confirm` 이 있으면 예/아니요를 받아 `ctx.laneChangeConfirmed` 를 넣고 `run` 을 다시 부른다.

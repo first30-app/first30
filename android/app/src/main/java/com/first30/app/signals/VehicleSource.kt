@@ -95,17 +95,21 @@ interface VehicleSink {
 /**
  * A source of raw vehicle channels, each at its own rate, plus incident triggers.
  *
- * Implementations: [FakeVehicleSource] (scenario replay) now; a Pleos Vehicle SDK source later. For the Pleos one,
- * see CLAUDE.md "다음 작업" item 3 (API names) and item 4 (triggers):
- * - turn signal `registerTurnSignalState` / `getCurrentTurnSignalState` → [SignalUpdate.TurnSignal] as 'LEFT'/'RIGHT'/'NONE'/'HAZARD'
- *   (check lever state vs. lamp blink; the engine bridges ≤1 s off gaps)
- * - steering `registerSteeringWheelAngle` → [SignalUpdate.Steering], right = +
+ * Implementations: [FakeVehicleSource] (scenario replay) now; a Pleos Vehicle SDK source later
+ * (`ai.pleos.playground:Vehicle:2.3.2`, docs/CONTEST.md "Pleos SDK 확인 사항"). Convert values with [PleosUnits]:
+ * - turn signal `registerTurnSignalState` / `getCurrentTurnSignalState` (`TurnSignalValue` OFF/LEFT/RIGHT, `CAR_LIGHTS`)
+ *   → [PleosUnits.turnSignal] → [SignalUpdate.TurnSignal] (lever vs. lamp blink unknown; the engine bridges ≤1 s off gaps)
+ * - steering `registerSteeringWheelAngle` (`CAR_DRIVE`): **front-wheel** degrees, left negative
+ *   → [PleosUnits.steeringWheelDeg] (× steering ratio) → [SignalUpdate.Steering]
  * - brake `registerBrakePedalStatus` → [SignalUpdate.Brake]
- * - airbag `registerSeatAirbagDeployed` / `hasSeatAirbagBeenDeployed` → [SignalUpdate.Airbag] and a [TriggerKind.AIRBAG] trigger
+ * - airbag `registerSeatAirbagDeployed` / `hasSeatAirbagBeenDeployed` (`CAR_SAFETY`, `checkAirbagDeployedCapabilities`)
+ *   → [SignalUpdate.Airbag] and a [TriggerKind.AIRBAG] trigger (the emulator Virtual Console has no airbag card)
  * - seat occupancy `registerSeatOccupancy` → occupants (context provider, not a frame channel)
- * - speed: no Vehicle SDK API — AAOS `CarPropertyManager` `PERF_VEHICLE_SPEED` (`android.car.permission.CAR_SPEED`) or FusedLocation deltas
- * - heading: `registerFusedLocationCallback` (may be ~1 Hz and/or map-matched — verify on the AVD)
- * - impact: accelerometer shock (`SensorManager` `TYPE_ACCELEROMETER`) → [TriggerKind.IMPACT] with the shock instant as [TriggerEvent.atMs]
+ * - speed: `VehicleSpeedListener` was removed in Vehicle 2.3.2 — AAOS `CarPropertyManager` `PERF_VEHICLE_SPEED` (m/s)
+ *   → [PleosUnits.speedKph] (permission `android.car.permission.CAR_SPEED` and/or `pleos.car.permission.CAR_SPEED` — verify)
+ * - heading: FusedLocation `LocationData.heading` (rate and map-matching undocumented — verify on the AVD)
+ * - impact: no Pleos crash/impact API; accelerometer access on the head unit is undocumented and the docs restrict direct
+ *   sensor access — [TriggerKind.IMPACT] stays unimplemented until confirmed
  * Lifecycle: check…Capabilities → getCurrent… → register…(listener, area) → unregister…(same listener, area) → `Vehicle.release()`.
  */
 interface VehicleSource {

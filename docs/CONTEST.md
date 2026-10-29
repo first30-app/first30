@@ -53,10 +53,35 @@
 - 출품작의 지식재산권은 참가자에게 남는다.
 - 주최측은 통상실시권을 가질 수 있고, 수상작에 대해 4개월 우선협상권을 둘 수 있다.
 
-## 설명회(10/28)에서 물어볼 것
+## Pleos SDK 확인 사항 (2026-10-29, 공식 사이트·document.pleos.ai 기준)
 
-1. 차량 속도: Vehicle SDK 목록에 속도 API가 없다. AAOS `PERF_VEHICLE_SPEED`(CarPropertyManager)를 써도 되는가, 에뮬레이터에서 값이 나오는가?
+설명회(10/28) 다시보기·질의응답은 아직 공개된 곳을 찾지 못했다(공지: "다시보기를 제공할 예정"). 아래는 개발 문서에서 확인한 것.
+
+- **Maven**: `https://nexus-playground.pleos.ai/repository/maven-releases/` (인증 없음). `ai.pleos.playground:Vehicle:2.3.2`,
+  `NaviHelper:3.0.5`, `TextToSpeech:3.3.1`, `SpeechToText:3.3.1`, `FusedLocation:1.1.3`. minSdk 28. 샘플 앱은 compileSdk 35.
+  권한은 매니페스트 선언만(`pleos.car.permission.CAR_*`, 실행 중 승인 창 없음). 배포 시 Pleos App Market 승인 범위 안에서만.
+- **SDK 상태**: `create-my-project` 문서는 Vehicle State·NaviHelper만 "사용 가능", FusedLocation·TTS·STT·Vehicle Control은 "준비 중".
+  릴리즈 노트(10/19)와 Maven에는 다섯 SDK가 모두 있다. TTS·STT 서버 모드는 My Project Client ID/Secret 등록 필요(ON_DEVICE는 불필요).
+- **차량 속도**: Vehicle 2.3.2에서 `VehicleSpeedListener` 삭제. 공식 FAQ는 AAOS `CarPropertyManager` `PERF_VEHICLE_SPEED`(m/s)를 쓰라고 한다.
+  권한은 Android 문서상 `android.car.permission.CAR_SPEED`, Pleos 샘플 매니페스트에는 `pleos.car.permission.CAR_SPEED` — AVD에서 확인.
+  FusedLocation `LocationData` 에는 속도 필드가 없다.
+- **핸들 각도**: `registerSteeringWheelAngle` 은 "front-wheel steering angle in degrees. Leftward … negative. … not the rotation angle of
+  the steering wheel". 엔진 문턱값은 핸들 회전각 기준이라 앱에서 조향비(기본 15)를 곱한다(`PleosUnits.steeringWheelDeg`).
+  Virtual Console 핸들 슬라이더는 −540~540° 라 콘솔 값과 API 값의 관계를 AVD에서 확인할 것.
+- **방향지시등**: `TurnSignalValue` OFF/LEFT/RIGHT(비상등 없음). 레버인지 램프 깜빡임인지는 문서에 없다.
+- **에어백**: `hasSeatAirbagBeenDeployed` / `registerSeatAirbagDeployed`(`CAR_SAFETY`, normal). 충돌·충격 전용 API는 없다.
+- **가속도 센서(충격 감지)**: 문서에 사용 가능하다는 기록이 없고, "차량의 물리적 제어나 센서에 직접 접근해서는 안 됩니다",
+  "제한될 수 있는 기능: … 일부 센서(자이로, 근접 등)" 문구가 있다. → 'impact' 트리거는 실차·AVD 확인 전까지 구현하지 않는다.
+- **에뮬레이터**: AVD "Pleos Connect v2.1.0"(API 34), Cold boot 필수(quick boot면 VHAL 안 됨), RAM 4GB.
+  Virtual Console(`adb forward tcp:8088 tcp:8088` → `http://127.0.0.1:8088/`)로 기어·브레이크·핸들·방향지시등·도어 등을 바꾼다.
+  **차량 속도 카드와 에어백 카드는 없다**(크루즈 목표 속도만). 주행 규제: `adb shell cmd hmg_car_service --service drivingstate driving_regulation on|off`.
+- **제출 추가 확인**: 마감 11/15(일) 23:59, 1차 발표 11/23, 2차 PT 12/3~4(오프라인, 실제 동작 시연 필수). 심사용 GitHub 계정 이름은 공지에 없다.
+
+## 아직 확인할 것 (문의: appdevchallenge@hyundai-partners.com)
+
+1. 에뮬레이터에서 `PERF_VEHICLE_SPEED` 값을 바꿀 수 있는가(Extended controls Car data 등), 필요한 권한은 무엇인가?
 2. **충돌 감지에 쓸 수 있는 신호(가장 중요)**: 에어백 전개 외에 가속도(G센서, Android `SensorManager`)·ADAS 경고·충돌 이벤트를 앱이 받을 수 있는가?
+   에뮬레이터에서 에어백 전개를 흉내 낼 방법이 있는가?
    퍼스트30은 충돌 순간을 차가 직접 감지했을 때만 과실 숫자를 내므로, 경미한 접촉의 충격 감지 가능 여부가 실사용 범위를 정한다.
    차선 인식(차선 이탈 경고) 정보를 받을 수 있으면 "굽은 길 vs 진로변경" 확인 질문 없이도 판단할 수 있다.
    FusedLocation 의 진행 방향이 도로에 맞춰진(map-matched) 값인지, 갱신 주기(1Hz?)와 핸들 대비 지연이 얼마인지도 확인.
