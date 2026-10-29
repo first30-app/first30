@@ -74,6 +74,7 @@ private val KoText = TextStyle(lineBreak = LineBreak.Paragraph.copy(strictness =
  * - 카드가 바뀌거나 지금 카드의 `tts` 가 바뀌면(확인 답으로 과실 카드가 갱신) [speaker] 로 읽는다. 자막은 음성이 꺼져도 나온다.
  * - 단계를 누르면 그 카드를 보여 주고 읽는다. 타임라인이 다음 카드로 넘어가면 다시 따라간다(30초 뒤엔 누른 카드에 머문다).
  * - 확인 질문 카드는 예/아니요 버튼을 늘 화면에 둔다. 빠른 도로 모드에서도 버튼은 보이고, 음성은 카드 tts 그대로 읽는다.
+ * - [demoRecord] 면 상태 표시에 "시연 · 합성 기록" 을 늘 붙인다(과실 숫자가 실제 차량 기록에서 나온 것처럼 보이지 않게).
  * - 질문 카드가 지나간 뒤에도 답이 없으면 뒤 카드(말하기·다음, 30초 뒤 포함)에 작은 예/아니요 막대를 둔다([IncidentUi.questionBarCard]).
  *   막대는 읽지 않고 타임라인도 멈추지 않는다. 막대로 답하면 지금 카드에 머물고 ≈4초 "답을 반영했어요 · 과실 카드 보기" 안내를 띄운다.
  */
@@ -90,6 +91,8 @@ fun IncidentScreen(
     frozenElapsedSec: Double? = null,
     /** 미리보기용: 막대로 답한 뒤의 안내를 이 과실 카드 번호로 띄워 둔다. */
     previewAnsweredNote: Int? = null,
+    /** 실제 차량 신호가 아니라 시나리오(합성 기록) 재생으로 시작한 사고. */
+    demoRecord: Boolean = false,
 ) {
     var nowMs by remember { mutableLongStateOf(clock()) }
     if (frozenElapsedSec == null) {
@@ -153,7 +156,7 @@ fun IncidentScreen(
                     verticalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 12.dp),
                 ) {
                     ClockRow(elapsedSec, ringSize = if (compact) 40.dp else 56.dp, compact = compact)
-                    StatusChips(ui, speakerState, vertical = true)
+                    StatusChips(ui, speakerState, vertical = true, demoRecord = demoRecord)
                     StepList(ui, shown, onStep, vertical = true, compact = compact)
                     EndButton(onReset, Modifier.fillMaxWidth())
                 }
@@ -169,7 +172,7 @@ fun IncidentScreen(
                     ClockRow(elapsedSec, ringSize = 48.dp, modifier = Modifier.weight(1f))
                     EndButton(onReset)
                 }
-                StatusChips(ui, speakerState, vertical = false)
+                StatusChips(ui, speakerState, vertical = false, demoRecord = demoRecord)
                 CardPanel(ui, card, onAnswer, wide = false, compact = false, big = false, modifier = Modifier.weight(1f))
                 BarSlot(barCard, answeredNote, onBarAnswer, onOpenFault, stacked = narrow, showHint = tall)
                 StepList(ui, shown, onStep, vertical = false)
@@ -210,8 +213,9 @@ fun ProgressRing(progress: Float, modifier: Modifier = Modifier) {
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun StatusChips(ui: IncidentUi, speakerState: SpeakerState, vertical: Boolean) {
+private fun StatusChips(ui: IncidentUi, speakerState: SpeakerState, vertical: Boolean, demoRecord: Boolean = false) {
     val chips = buildList {
+        if (demoRecord) add("시연 · 합성 기록" to Tone.WARN)
         add(ui.modeLabel to ui.modeTone)
         add((if (ui.sealed) "기록 봉인됨" else "봉인 실패 · 블랙박스 원본 보관") to (if (ui.sealed) Tone.OK else Tone.CRIT))
         when (speakerState) {

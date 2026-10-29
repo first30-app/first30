@@ -105,6 +105,8 @@ private fun App(ui: UiViewModel, vm: IncidentViewModel) {
             onAnswer = vm::answer,
             onReset = vm::reset,
             clock = SystemClock::elapsedRealtime,
+            // 이 빌드는 시나리오 재생만 한다(Pleos 신호원이 붙으면 그 신호원으로 시작한 사고만 false).
+            demoRecord = true,
         )
     }
 }
