@@ -83,7 +83,7 @@ fun StartScreen(
     val options: @Composable () -> Unit = {
         if (replaying) ReplayBanner()
         else {
-            Toggle("확인 질문 답을 시나리오대로 미리 넣기", "바로 예상 과실까지 보여 줍니다", "실제 앱처럼 화면에서 예/아니요를 묻습니다", preAnswer, onPreAnswerChange)
+            Toggle("확인 질문 답을 시나리오대로 미리 넣기", "답이 정해진 장면은 질문 없이 그 답으로 계산합니다", "실제 앱처럼 화면에서 예/아니요를 묻습니다", preAnswer, onPreAnswerChange)
             Toggle("주행 기록을 실시간으로 재생한 뒤 감지", "약 10초 주행 후 시나리오의 트리거(충격·에어백 등)가 옵니다. 그 전에 누르면 버튼 신고", "기록을 바로 넣고 곧장 시작합니다", replay, onReplayChange)
         }
     }
