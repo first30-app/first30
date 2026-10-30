@@ -92,6 +92,19 @@ private val MODE_KO = mapOf(
 
 private val DEFAULT_AT = listOf(0, 5, 10, 20, 25)
 
+/**
+ * 엔진은 봉인(지문)을 만들었지만 앱 내부 저장소에 쓰지 못한 경우: 봉인 카드와 다음 단계가 "봉인했어요·첨부 가능"이라고
+ * 말하지 않게, 엔진이 봉인 실패 때 쓰는 문장으로 바꾼다(지문 줄은 저장된 파일이 없으므로 뺀다).
+ */
+private fun unsavedSeal(c: CardUi): CardUi = when (c.kind) {
+    "evidence" -> c.copy(
+        lines = listOf(LineUi("기록을 저장하지 못했어요 — 블랙박스 원본을 따로 보관하세요", LineStyle.PLAIN)),
+        tts = "기록 봉인에 실패했어요. 블랙박스 원본을 따로 보관하세요.",
+    )
+    "next" -> c.copy(lines = c.lines.map { it.copy(text = it.text.replace(" (봉인 기록 첨부 가능)", "")) })
+    else -> c
+}
+
 fun lineUi(line: String): LineUi = when {
     line.startsWith("○ ") -> LineUi(line.substring(2), LineStyle.SAY)
     line.startsWith("✕ ") -> LineUi(line.substring(2), LineStyle.AVOID)
@@ -119,7 +132,7 @@ fun RunOutput.toUi(startedAtMs: Long, answer: Boolean?, stored: Boolean? = null)
         modeTone = tone,
         sealed = seal != null && stored != false,
         sealHashShort = seal?.hash?.take(12),
-        cards = flow.cards.mapIndexed(::cardUi),
+        cards = flow.cards.mapIndexed(::cardUi).let { if (stored == false) it.map(::unsavedSeal) else it },
         startedAtMs = startedAtMs,
         answer = answer,
     )

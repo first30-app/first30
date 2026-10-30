@@ -240,11 +240,11 @@ companion + sealEvidence
 | 엔진 입력 | Pleos Connect |
 |---|---|
 | turnSignal | Vehicle SDK `registerTurnSignalState` (레버 상태인지 램프 깜빡임인지 확인 — 어느 쪽이든 엔진이 깜빡임을 잇는다) |
-| steeringDeg | Vehicle SDK `registerSteeringWheelAngle` (오른쪽 + 로 부호 맞춤) |
+| steeringDeg | Vehicle SDK `registerSteeringWheelAngle` — 문서상 **앞바퀴 조향각**(왼쪽 −). 엔진 문턱값은 핸들 회전각 기준이라 × 조향비(기본 15) → `PleosUnits.steeringWheelDeg` (AVD에서 확인) |
 | brake | Vehicle SDK `registerBrakePedalStatus` |
 | airbag | Vehicle SDK `registerSeatAirbagDeployed` / `hasSeatAirbagBeenDeployed` |
 | headingDeg | FusedLocation `registerFusedLocationCallback` (갱신 주기가 1Hz 수준일 수 있음 — 링버퍼는 마지막 값을 유지해 10Hz로 채운다. 지도에 맞춘(map-matched) 방향이면 진로변경이 보이지 않고, 핸들보다 늦게 반응하면 엔진이 지연을 재서 판단을 낮춘다. AVD·실차에서 확인) |
-| speedKph | AAOS `PERF_VEHICLE_SPEED` (Vehicle SDK에 속도 API 없음 — 설명회 확인 필요), 대안: 위치 변화로 계산 |
+| speedKph | AAOS `CarPropertyManager` `PERF_VEHICLE_SPEED` (m/s → `PleosUnits.speedKph`; Vehicle 2.3.2에서 `VehicleSpeedListener` 삭제, 공식 FAQ 안내). 권한과 에뮬레이터 값 조절은 AVD에서 확인 |
 | trigger | 에어백 `airbag` / 충격 감지 `impact`(머리 장치 가속도 센서 — 확인 필요) → 숫자 가능. 음성 `voice` / 버튼 `button` / 급감속 `decel` → 숫자 없음 (`ctx.trigger`) |
 | laneChangeConfirmed | 확인 질문 "그때 ({오른쪽/왼쪽}) 차로로 진로를 바꾸던 중이었나요?"의 답 (STT 예/아니요 또는 화면 버튼). 질문 문장은 `result.confirm.question`. true(예) / false(아니요) / 묻기 전에는 넣지 않음 (`ctx.laneChangeConfirmed`) |
 | occupants | Vehicle SDK `registerSeatOccupancy` — 운전석 말고 사람이 앉은 좌석 수 (`ctx.occupants`) |

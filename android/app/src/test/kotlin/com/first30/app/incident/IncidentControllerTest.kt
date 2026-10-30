@@ -151,7 +151,15 @@ class IncidentControllerTest {
         assertNotNull(sess.output.seal)
         assertEquals(false, sess.stored)
         assertEquals("disk full", c.lastSealError)
-        assertEquals(false, sess.output.toUi(sess.startedAtMs, null, sess.stored).sealed)
+        val ui = sess.output.toUi(sess.startedAtMs, null, sess.stored)
+        assertEquals(false, ui.sealed)
+        // cards and voice must not say the record was sealed / can be attached
+        val evidence = ui.cards.first { it.kind == "evidence" }
+        assertEquals("기록 봉인에 실패했어요. 블랙박스 원본을 따로 보관하세요.", evidence.tts)
+        assertTrue(evidence.lines.none { "봉인했어요" in it.text || "SHA-256" in it.text })
+        assertTrue(ui.cards.first { it.kind == "next" }.lines.none { "첨부" in it.text })
+        // saved (or nothing to save) → engine cards unchanged
+        assertEquals(sess.output.toUi(sess.startedAtMs, null, true).cards.first { it.kind == "evidence" }.tts, "사고 전 기록을 봉인했어요.")
 
         val (ok, okBuf) = controller(s, store = FileSealStore(File(tmp, "seals-ok")))
         okBuf.preload(s.frames, testScheduler.currentTime)
