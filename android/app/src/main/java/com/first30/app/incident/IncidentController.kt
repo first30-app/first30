@@ -32,6 +32,8 @@ data class IncidentSession(
     val startedAtMs: Long,
     val ctx: Ctx,
     val frames: List<Frame>,
+    /** Seal saved to the store: true saved / false save failed / null nothing to save (no seal or no store). */
+    val stored: Boolean? = null,
 )
 
 /**
@@ -145,18 +147,21 @@ class IncidentController(
             runMutex.withLock {
                 if (synchronized(lock) { r != rev }) return@withLock // superseded before it started
                 val out = withContext(engineDispatcher) { run(inc.frames, inc.ctx, judge, runOpts, wallClock) }
-                synchronized(lock) {
-                    if (r == rev && incident?.id == inc.id) _session.value = IncidentSession(out, inc.startedAtMs, inc.ctx, inc.frames)
-                }
+                // Save before publishing so the screen never says "봉인됨" for a seal that is not on disk.
                 val seal = out.seal
                 val store = sealStore
-                if (seal != null && store != null) {
+                val stored = if (seal != null && store != null) {
                     try {
                         withContext(ioDispatcher) { store.save(seal) }
                         lastSealError = null
+                        true
                     } catch (e: Exception) {
                         lastSealError = e.message ?: e.toString()
+                        false
                     }
+                } else null
+                synchronized(lock) {
+                    if (r == rev && incident?.id == inc.id) _session.value = IncidentSession(out, inc.startedAtMs, inc.ctx, inc.frames, stored)
                 }
             }
         }

@@ -14,7 +14,8 @@ import kotlinx.coroutines.ensureActive
  *   rely on missing = null). Ticks before any channel was ever received are not recorded.
  * - [snapshot] returns the samples up to the trigger instant, re-timed so t = 0 is the trigger (ms, negative before),
  *   in time order. If the last sample is earlier than the trigger, one extra sample at exactly t = 0 is appended
- *   with the latest values (so the impact instant always has a frame).
+ *   with the latest values received up to the trigger (so the impact instant always has a frame; values that arrived
+ *   after a late-reported trigger are not used).
  *
  * Thread-safe. Time comes from [clock]; [runSampler] drives [tick] on the [periodMs] grid (absolute multiples of
  * [periodMs] on [clock]), or tests call [tick] directly.
@@ -78,6 +79,20 @@ class SignalRingBuffer(
 
     private fun current(atMs: Long) = Sample(atMs, speed.value, heading.value, steering.value, turn.value, brake.value, airbag.value)
 
+    /**
+     * The t = 0 frame when no tick landed exactly on the trigger. A trigger can arrive late (an 'impact' callback stamped
+     * with the earlier shock instant), so a channel updated **after** [triggerAtMs] must not leak its post-impact value
+     * into the impact frame: it keeps its value from the last sample before the trigger ([prev]), or null if none.
+     */
+    private fun atTrigger(triggerAtMs: Long, prev: Sample?): Sample {
+        fun <T> Ch<T>.at(fromPrev: Sample.() -> T?): T? = if (atMs <= triggerAtMs) value else prev?.fromPrev()
+        return Sample(
+            triggerAtMs,
+            speed.at { speedKph }, heading.at { headingDeg }, steering.at { steeringDeg },
+            turn.at { turnSignal }, brake.at { brake }, airbag.at { airbag },
+        )
+    }
+
     /** Records one sample at [atMs] (default: now). Ignored if not after the previous sample, or if nothing was ever received. */
     fun tick(atMs: Long = clock.nowMs()) {
         synchronized(lock) {
@@ -93,7 +108,7 @@ class SignalRingBuffer(
     fun snapshot(triggerAtMs: Long = clock.nowMs()): List<Frame> = synchronized(lock) {
         val from = triggerAtMs - windowMs
         val rows = samples.filter { it.atMs in (from + 1)..triggerAtMs }.toMutableList()
-        if (anyReceived() && (rows.isEmpty() || rows.last().atMs < triggerAtMs)) rows.add(current(triggerAtMs))
+        if (anyReceived() && (rows.isEmpty() || rows.last().atMs < triggerAtMs)) rows.add(atTrigger(triggerAtMs, rows.lastOrNull()))
         rows.map { s ->
             Frame.of(
                 t = s.atMs - triggerAtMs,

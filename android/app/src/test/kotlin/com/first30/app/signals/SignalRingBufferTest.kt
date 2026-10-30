@@ -103,4 +103,21 @@ class SignalRingBufferTest {
         b.update(SignalUpdate.Steering(-0.0, 0)); b.tick(0)
         assertEquals(JsScalar.Num(-0.0), b.snapshot(0).single().steeringDeg)
     }
+
+    @Test
+    fun `late trigger - values that arrived after the impact instant do not leak into the t=0 frame`() {
+        val b = SignalRingBuffer(clock)
+        b.update(SignalUpdate.Steering(5.0, 0)); b.update(SignalUpdate.Airbag(false, 0)); b.update(SignalUpdate.Speed(60.0, 0))
+        b.tick(100)
+        b.update(SignalUpdate.Speed(58.0, 120))     // before the impact at 150 → used
+        b.update(SignalUpdate.Steering(-30.0, 170)) // after the impact → not used
+        b.update(SignalUpdate.Airbag(true, 180))    // after the impact → not used
+        b.update(SignalUpdate.Brake(true, 190))     // first ever brake value, after the impact → null
+        val f = b.snapshot(150).last()
+        assertEquals(JsScalar.Num(0.0), f.t)
+        assertEquals(JsScalar.Num(58.0), f.speedKph)
+        assertEquals(JsScalar.Num(5.0), f.steeringDeg)
+        assertEquals(JsScalar.Bool(false), f.airbag)
+        assertEquals(JsScalar.Null, f.brake)
+    }
 }

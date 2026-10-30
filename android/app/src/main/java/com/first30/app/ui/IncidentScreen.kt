@@ -1,5 +1,6 @@
 package com.first30.app.ui
 
+import android.app.Activity
 import android.os.SystemClock
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Canvas
@@ -41,9 +42,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
@@ -107,13 +110,19 @@ fun IncidentScreen(
     val elapsedSec = frozenElapsedSec ?: ((nowMs - ui.startedAtMs).coerceAtLeast(0) / 1000.0)
     val timelineIndex = ui.activeIndexAt(elapsedSec)
     // (고른 카드, 고를 때의 타임라인 카드)
-    var manual by remember(ui.startedAtMs) { mutableStateOf<Pair<Int, Int>?>(null) }
+    var manual by rememberSaveable(ui.startedAtMs) { mutableStateOf<Pair<Int, Int>?>(null) }
     val shown = manual?.takeIf { it.second == timelineIndex }?.first ?: timelineIndex
     val card = ui.cards[shown.coerceIn(0, ui.cards.lastIndex)]
 
     if (frozenElapsedSec == null) {
-        LaunchedEffect(ui.startedAtMs, shown, card.tts) { speaker.speak(card.tts) }
-        DisposableEffect(ui.startedAtMs) { onDispose { speaker.stop() } }
+        // 화면 회전(Activity 재생성) 뒤에는 이미 읽은 카드를 처음부터 다시 읽지 않고, 읽던 음성도 끊지 않는다.
+        val speakKey = "$shown|${card.tts}"
+        var spokenKey by rememberSaveable(ui.startedAtMs) { mutableStateOf<String?>(null) }
+        LaunchedEffect(ui.startedAtMs, speakKey) {
+            if (spokenKey != speakKey) { spokenKey = speakKey; speaker.speak(card.tts) }
+        }
+        val activity = LocalContext.current as? Activity
+        DisposableEffect(ui.startedAtMs) { onDispose { if (activity?.isChangingConfigurations != true) speaker.stop() } }
     }
     val speakerState by speaker.state.collectAsState()
 
@@ -121,9 +130,9 @@ fun IncidentScreen(
 
     // 뒤 카드의 확인 질문 막대(소리 내지 않는다). 누르면 바로 숨기고(두 번 눌림 방지) 같은 답 경로로 보낸다.
     // 답이 다시 비워지면(충격 트리거로 기록이 바뀐 경우) ui.answer 키로 다시 띄운다.
-    var barAnswered by remember(ui.startedAtMs, ui.answer) { mutableStateOf(false) }
+    var barAnswered by rememberSaveable(ui.startedAtMs, ui.answer) { mutableStateOf(false) }
     // 막대로 답한 뒤 잠깐 보이는 안내(누르면 과실 카드). 값 = 과실 카드 번호.
-    var answeredNote by remember(ui.startedAtMs) { mutableStateOf(previewAnsweredNote) }
+    var answeredNote by rememberSaveable(ui.startedAtMs) { mutableStateOf(previewAnsweredNote) }
     val barCard = ui.questionBarCard(shown, timelineIndex, barAnswered)
     val onBarAnswer: (Boolean) -> Unit = { v ->
         if (!barAnswered && barCard != null) {

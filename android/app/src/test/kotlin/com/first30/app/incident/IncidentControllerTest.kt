@@ -5,6 +5,7 @@ import com.first30.app.signals.MonoClock
 import com.first30.app.signals.SignalRecorder
 import com.first30.app.signals.SignalRingBuffer
 import com.first30.app.signals.TriggerEvent
+import com.first30.app.ui.toUi
 import com.first30.core.engine.EngineClock
 import com.first30.core.scenarios.Expect
 import com.first30.core.scenarios.Scenario
@@ -130,6 +131,33 @@ class IncidentControllerTest {
         c.trigger("impact")
         advanceUntilIdle()
         assertNotEquals(now, c.session.value!!.ctx.now)
+    }
+
+    @Test
+    fun `seal save failure is published so the screen does not claim the record was sealed`() = runTest {
+        val s = scenario("confirm_needed")
+        val failing = object : SealStore {
+            override fun save(hash: String, canonical: String): StoredSeal = throw java.io.IOException("disk full")
+            override fun load(hash: String): StoredSeal? = null
+            override fun verify(hash: String) = false
+            override fun list() = emptyList<String>()
+        }
+        val (c, buffer) = controller(s, store = failing)
+        testScheduler.advanceTimeBy(30_000)
+        buffer.preload(s.frames, testScheduler.currentTime)
+        c.trigger("impact")
+        advanceUntilIdle()
+        val sess = c.session.value!!
+        assertNotNull(sess.output.seal)
+        assertEquals(false, sess.stored)
+        assertEquals("disk full", c.lastSealError)
+        assertEquals(false, sess.output.toUi(sess.startedAtMs, null, sess.stored).sealed)
+
+        val (ok, okBuf) = controller(s, store = FileSealStore(File(tmp, "seals-ok")))
+        okBuf.preload(s.frames, testScheduler.currentTime)
+        ok.trigger("impact")
+        advanceUntilIdle()
+        assertEquals(true, ok.session.value!!.stored)
     }
 
     @Test

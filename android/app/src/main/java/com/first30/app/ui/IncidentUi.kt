@@ -110,14 +110,14 @@ fun cardUi(index: Int, c: Card): CardUi = CardUi(
     confirm = c.confirm?.let { ConfirmUi(it.question, it.hint?.takeIf { h -> h.isNotEmpty() }, it.direction) },
 )
 
-/** RunOutput → 화면 값. [answer] 는 ctx.laneChangeConfirmed. */
-fun RunOutput.toUi(startedAtMs: Long, answer: Boolean?): IncidentUi {
+/** RunOutput → 화면 값. [answer] 는 ctx.laneChangeConfirmed, [stored] 는 IncidentSession.stored(false 면 봉인 실패로 표시). */
+fun RunOutput.toUi(startedAtMs: Long, answer: Boolean?, stored: Boolean? = null): IncidentUi {
     val (label, tone) = MODE_KO[flow.mode] ?: (flow.mode to Tone.NEUTRAL)
     return IncidentUi(
         mode = flow.mode,
         modeLabel = label,
         modeTone = tone,
-        sealed = seal != null,
+        sealed = seal != null && stored != false,
         sealHashShort = seal?.hash?.take(12),
         cards = flow.cards.mapIndexed(::cardUi),
         startedAtMs = startedAtMs,
