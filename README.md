@@ -39,7 +39,7 @@ adb shell am start -n com.first30.app/.MainActivity      # 또는 앱 목록에�
 4. "확인 질문 답을 시나리오대로 미리 넣기"를 켜면 답이 정해진 장면은 질문 없이 그 답으로 바로 계산합니다
    (두 번째 장면처럼 앱이 먼저 묻는 장면이나 음성 신고 장면은 그대로 질문하거나 보류합니다).
 
-화면 확인용 바로 시작(`-S` 는 떠 있는 앱을 끄고 다시 여는 옵션 — 없으면 이미 열린 앱에서는 시나리오가 시작되지 않습니다. 시나리오 id 는 `android/core/src/main/kotlin/com/first30/core/scenarios/Scenarios.kt`):
+화면 확인용 바로 시작(`-S` 는 떠 있는 앱을 끄고 다시 여는 옵션 — 없으면 앱이 열린 방식에 따라 시나리오가 무시되거나 화면이 하나 더 쌓일 수 있습니다. 시나리오 id 는 `android/core/src/main/kotlin/com/first30/core/scenarios/Scenarios.kt`):
 
 ```bash
 adb shell am start -S -n com.first30.app/.MainActivity --es scenario confirm_needed
