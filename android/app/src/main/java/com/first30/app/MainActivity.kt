@@ -55,7 +55,8 @@ class MainActivity : ComponentActivity() {
             navigationBarStyle = SystemBarStyle.dark(Color.TRANSPARENT),
         )
         super.onCreate(savedInstanceState)
-        // 시연·화면 확인용: adb shell am start -n com.first30.app/.MainActivity --es scenario airbag [--ez preAnswer true]
+        // 시연·화면 확인용: adb shell am start -S -n com.first30.app/.MainActivity --es scenario airbag [--ez preAnswer true]
+        // (-S: 앱이 이미 떠 있으면 같은 인텐트로 보고 앞으로만 가져와 extras 를 무시하므로 다시 시작한다)
         if (savedInstanceState == null) {
             intent?.getStringExtra("scenario")?.let { id ->
                 if (Scenarios.ALL.any { it.id == id }) {

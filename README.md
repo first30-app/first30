@@ -39,11 +39,11 @@ adb shell am start -n com.first30.app/.MainActivity      # 또는 앱 목록에�
 4. "확인 질문 답을 시나리오대로 미리 넣기"를 켜면 답이 정해진 장면은 질문 없이 그 답으로 바로 계산합니다
    (두 번째 장면처럼 앱이 먼저 묻는 장면이나 음성 신고 장면은 그대로 질문하거나 보류합니다).
 
-화면 확인용 바로 시작(시나리오 id 는 `android/core/src/main/kotlin/com/first30/core/scenarios/Scenarios.kt`):
+화면 확인용 바로 시작(`-S` 는 떠 있는 앱을 끄고 다시 여는 옵션 — 없으면 이미 열린 앱에서는 시나리오가 시작되지 않습니다. 시나리오 id 는 `android/core/src/main/kotlin/com/first30/core/scenarios/Scenarios.kt`):
 
 ```bash
-adb shell am start -n com.first30.app/.MainActivity --es scenario confirm_needed
-adb shell am start -n com.first30.app/.MainActivity --es scenario airbag --ez preAnswer true
+adb shell am start -S -n com.first30.app/.MainActivity --es scenario confirm_needed
+adb shell am start -S -n com.first30.app/.MainActivity --es scenario airbag --ez preAnswer true
 ```
 
 ### 소스에서 빌드
@@ -95,7 +95,7 @@ JDK 17 · AGP 8.13 · Kotlin 2.2 · Jetpack Compose · compileSdk/targetSdk 35 �
 
 ### 현재 버전의 범위
 
-- 지금 APK는 **합성 차량 신호 시나리오를 재생**합니다(10Hz, 최근 20초). 실제 차량 신호는 쓰지 않으므로 별도 권한이 필요 없습니다.
+- 지금 APK는 **합성 차량 신호 시나리오를 재생**합니다(10Hz, 충돌 전 10초 — 링버퍼는 최근 20초까지 보관). 실제 차량 신호는 쓰지 않으므로 별도 권한이 필요 없습니다.
   사고 화면의 상태 표시에 **"시연 · 합성 기록"** 이 늘 붙어, 과실 숫자가 실제 차량 기록에서 나온 것이 아님을 알립니다.
   (Pleos 에뮬레이터의 Virtual Console 에는 에어백·충격 신호가 없어, 충돌 순간을 아는 장면은 시나리오 재생으로 보여 줍니다.)
 - 다음 단계: Pleos Vehicle SDK(방향지시등·핸들 각도·브레이크·에어백·착석), 차량 속도, FusedLocation 으로 실제 신호를 받아 같은 링버퍼에 넣기.

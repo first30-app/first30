@@ -43,16 +43,19 @@ import com.first30.core.scenarios.Scenario
 
 private val KoText = TextStyle(lineBreak = LineBreak.Paragraph.copy(strictness = LineBreak.Strictness.Strict, wordBreak = LineBreak.WordBreak.Phrase))
 
+/** 시나리오가 사고를 알리는 방식. */
+fun triggerLabel(s: Scenario): String = when (s.ctx.trigger) {
+    "airbag" -> "에어백 전개"
+    "impact" -> "충격 감지"
+    "voice" -> "음성 신고"
+    "button" -> "버튼 신고"
+    "decel" -> "급감속"
+    else -> "트리거 모름"
+}
+
 /** 시나리오 한 줄에 붙이는 표시(무엇으로 사고를 감지했는지·도로). */
 fun scenarioTags(s: Scenario): String {
-    val trig = when (s.ctx.trigger) {
-        "airbag" -> "에어백 전개"
-        "impact" -> "충격 감지"
-        "voice" -> "음성 신고"
-        "button" -> "버튼 신고"
-        "decel" -> "급감속"
-        else -> "트리거 모름"
-    }
+    val trig = triggerLabel(s)
     val road = when (s.ctx.roadType) {
         "highway" -> "고속도로"
         "urban" -> "일반도로"
@@ -81,7 +84,7 @@ fun StartScreen(
     onButtonReport: () -> Unit = {},
 ) {
     val options: @Composable () -> Unit = {
-        if (replaying) ReplayBanner()
+        if (replaying) ReplayBanner(scenarios.firstOrNull { it.id == selectedId } ?: scenarios.first())
         else {
             Toggle("확인 질문 답을 시나리오대로 미리 넣기", "답이 정해진 장면은 질문 없이 그 답으로 계산합니다", "실제 앱처럼 화면에서 예/아니요를 묻습니다", preAnswer, onPreAnswerChange)
             Toggle("주행 기록을 실시간으로 재생한 뒤 감지", "약 10초 주행 후 시나리오의 트리거(충격·에어백 등)가 옵니다. 그 전에 누르면 버튼 신고", "기록을 바로 넣고 곧장 시작합니다", replay, onReplayChange)
@@ -194,14 +197,14 @@ private fun SelectedSummary(s: Scenario) {
 }
 
 @Composable
-private fun ReplayBanner() {
+private fun ReplayBanner(s: Scenario) {
     Row(
         Modifier.fillMaxWidth().border(1.dp, F30.hazard, RoundedCornerShape(12.dp)).padding(14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         androidx.compose.material3.CircularProgressIndicator(Modifier.size(24.dp), color = F30.hazard, strokeWidth = 3.dp)
-        KText("주행 기록 재생 중 — 곧 차량이 사고를 감지해요. 지금 누르면 버튼 신고로 시작합니다.", color = F30.fg, fontSize = 16.sp, lineHeight = 23.sp, style = KoText)
+        KText("주행 기록 재생 중 — 곧 이 장면의 사고 신호(${triggerLabel(s)})가 와요. 지금 누르면 버튼 신고로 시작합니다.", color = F30.fg, fontSize = 16.sp, lineHeight = 23.sp, style = KoText)
     }
 }
 
