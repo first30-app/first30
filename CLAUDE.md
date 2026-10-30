@@ -25,7 +25,7 @@
     Jev 네트워크 호출은 앱이 `JevTransport` 로 넣는다.
   - `:app` (Compose) — 10Hz 링버퍼·가짜 차량 신호원(시나리오 재생)·사고 컨트롤러·5단계 카드 화면·TTS. **다음 작업: 실제 Vehicle SDK 신호·충격 트리거(아래 3~4).** 차량 속도·충격 감지는 10/28 설명회 확인 뒤.
   - release: `./gradlew :app:exportReleaseApk` → 서명된 APK(v1·v2·v3, R8 축소)를 `apk/<팀명>_퍼스트30_release.apk` 로 복사(팀명 = `gradle.properties` 의 `submission.teamName`, 아직 `팀명`).
-    서명 키·비밀번호는 `android/keystore/`·`android/keystore.properties`(gitignore, 잃어버리면 같은 앱으로 업데이트 불가 — 따로 백업). 없으면 debug 키로 서명된다.
+    서명 키·비밀번호는 `android/keystore/`·`android/keystore.properties`(gitignore, 잃어버리면 같은 앱으로 업데이트 불가 — 따로 백업). 없으면 assembleRelease 는 debug 키로 서명되고 exportReleaseApk 는 실패한다(debug 서명 APK가 제출 파일로 복사되지 않게).
 
 ## 클라우드 세션에서 작업할 때
 
@@ -51,7 +51,7 @@
     'starting' 에서 "예"면 B로 계산하되 신호 가산은 늘 범위에만. 그 무렵 브레이크를 밟았으면(`laneChange.reason === 'evasive'`) 묻지 않고 보류.
 - 'none' 은 진행 방향이 차로를 지킨 것처럼 보여도 핸들이 도로를 따라가는 각도에서 크게·오래 벗어나 있으면(곡선 끝의 같은 쪽 진로변경 등)
   `uncertain/steer_activity` 로 낮춘다. 곡선 맞춤이 충돌 2초 전 무렵까지 이어지지 않으면 곡선 뒤 곧은 구간에서 기준을 다시 잡고,
-  없으면 `uncertain/road_change`. 진행 방향이 핸들보다 1.3초 넘게 늦으면(`quality.headingLagSec`) 그 사이 핸들이 움직였을 때 `uncertain/heading_lag`
+  없으면 `uncertain/road_change`. 진행 방향이 핸들보다 1.3초 이상 늦으면(`quality.headingLagSec`) 그 사이 핸들이 움직였을 때 `uncertain/heading_lag`
   (잰 지연은 신호 선행 거리 여유에도 더한다). 'starting' 은 핸들 기록이 있어야 하고, 반대쪽 진로변경을 마무리하는 움직임으로 보이면 `uncertain/opposite_pair`.
 - 방향지시등: 시작 무렵(시작 시점 오차 안)에 켰거나, 기록이 없거나(`unavailable`), 켠 시점이 기록 밖이면(`indeterminate`) +10은 범위에만.
   'detected' 라도 움직인 방향을 믿기 어려우면(`laneChange.directionCaveat`: 시작 3초 전~충돌 사이 반대쪽 방향지시등 'opposite_signal' /
@@ -72,7 +72,7 @@
    - 권한 선언: https://document.pleos.ai/docs/pleos-only/connect-sdk-pleos/Vehicle/vehicle-permission (쓰는 API의 최소 권한만)
 2. 엔진 이식: `engine/engine.js` 의 `prepare → analyzeWindow → renderFacts → buildJevRequest → computeFault → companion → sealEvidence`
    (+ `local-judge.js`, `jev-client.js` 의 응답 검증)를 Kotlin `core` 패키지로 옮긴다.
-   **JS 테스트 101개의 입력·기대값을 그대로 JUnit 테스트로 옮겨 같은 결과가 나오는지 먼저 맞춘다.**
+   **JS 테스트 102개의 입력·기대값을 그대로 JUnit 테스트로 옮겨 같은 결과가 나오는지 먼저 맞춘다.**
    (`scenarios/scenarios.js` 의 합성 공식을 그대로 쓰면 프레임이 같아진다.) 설계와 문턱값은 `docs/DESIGN.md` 3장.
 3. 신호 수집기(10Hz 링버퍼, **최근 20초** — 고속에서 느린 진로변경까지 가리려면 14초 이상이 필요하다. 엔진은 받은 버퍼 전체를 쓴다).
    엔진 입력 `ctx`: `trigger`('airbag'|'impact'|'decel'|'voice'|'button'), `roadType`('urban'|'highway'), `navCautions`, `driverStatement`,

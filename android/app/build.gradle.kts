@@ -114,6 +114,7 @@ val exportReleaseApk by tasks.registering(Copy::class) {
     into(rootProject.layout.projectDirectory.dir("../apk"))
     rename { "${team}_퍼스트30_release.apk" }
     doFirst {
-        if (!hasReleaseKey) logger.warn("WARNING: exporting a DEBUG-signed release APK (keystore.properties missing).")
+        // 제출 파일명으로 debug 키 서명 APK 가 복사되지 않게 막는다(assembleRelease 자체는 debug 키로 계속 된다).
+        if (!hasReleaseKey) throw GradleException("exportReleaseApk: android/keystore.properties (or its keystore) not found — refusing to export a DEBUG-signed APK as the submission file.")
     }
 }
