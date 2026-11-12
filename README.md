@@ -20,14 +20,14 @@ https://first30-app.github.io/first30/demo/index.html — 브라우저에서 바
 
 ## APK 위치
 
-[`apk/팀명_퍼스트30_release.apk`](apk/) — 서명된 release 빌드 (versionName 1.0.0, minSdk 28, APK Signature Scheme v1·v2·v3).
+[`apk/골든타임_퍼스트30_release.apk`](apk/) — 서명된 release 빌드 (versionName 1.0.0, minSdk 28, APK Signature Scheme v1·v2·v3).
 
 ## 실행 방법
 
 ### APK 설치와 시연
 
 ```bash
-adb install apk/팀명_퍼스트30_release.apk
+adb install apk/골든타임_퍼스트30_release.apk
 adb shell am start -n com.first30.app/.MainActivity      # 또는 앱 목록에서 "퍼스트30"
 ```
 
