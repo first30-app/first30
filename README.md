@@ -76,6 +76,9 @@ keyPassword=…
 
 ### Pleos Connect 에뮬레이터
 
+- **에뮬레이터 버전**: Pleos Connect v2.1.0 (Android 14 / API 34, Automotive 시스템 이미지)
+- **화면 규격**: 2560×1440 px, 12.8인치, 160dpi(mdpi), 가로 방향 — 시스템 이미지에 들어 있는 기기 정의(`devices.xml`) 기준
+
 1. Android Studio → **SDK Manager → SDK Update Sites** 에서 사이트 추가
    - 이름: `Pleos Connect System Image`
    - URL (Mac, Apple Silicon): `https://nexus-playground.pleos.ai/repository/raw-releases/connect-avd/2.x/crp-arm64-sys-img.xml`
