@@ -243,9 +243,9 @@ companion + sealEvidence
 | steeringDeg | Vehicle SDK `registerSteeringWheelAngle` (오른쪽 + 로 부호 맞춤) |
 | brake | Vehicle SDK `registerBrakePedalStatus` |
 | airbag | Vehicle SDK `registerSeatAirbagDeployed` / `hasSeatAirbagBeenDeployed` |
-| headingDeg | FusedLocation `registerFusedLocationCallback` (갱신 주기가 1Hz 수준일 수 있음 — 링버퍼는 마지막 값을 유지해 10Hz로 채운다. 지도에 맞춘(map-matched) 방향이면 진로변경이 보이지 않고, 핸들보다 늦게 반응하면 엔진이 지연을 재서 판단을 낮춘다. AVD·실차에서 확인) |
-| speedKph | AAOS `PERF_VEHICLE_SPEED` (Vehicle SDK에 속도 API 없음 — 설명회 확인 필요), 대안: 위치 변화로 계산 |
-| trigger | 에어백 `airbag` / 충격 감지 `impact`(머리 장치 가속도 센서 — 확인 필요) → 숫자 가능. 음성 `voice` / 버튼 `button` / 급감속 `decel` → 숫자 없음 (`ctx.trigger`) |
+| headingDeg | FusedLocation `registerFusedLocationCallback` (공모전 공지상 사용 가능하나 Pleos 기획 가이드 실차 호환성 표에는 Not supported — 적용 범위 확인 필요. 갱신 주기가 1Hz 수준일 수 있음 — 링버퍼는 마지막 값을 유지해 10Hz로 채운다. 지도에 맞춘(map-matched) 방향이면 진로변경이 보이지 않고, 핸들보다 늦게 반응하면 엔진이 지연을 재서 판단을 낮춘다. AVD·실차에서 확인) |
+| speedKph | AAOS `PERF_VEHICLE_SPEED` (Vehicle SDK에 속도 API 없음 — Pleos FAQ 안내 방식, 에뮬레이터 값은 미확인), 대안: 위치 변화로 계산 |
+| trigger | 에어백 `airbag` / 충격 감지 `impact`(가속도·ADAS 신호가 공개 SDK 문서에 없어 향후 계획 — 공지상 문서에 없는 기능은 사용 불가) → 숫자 가능. 음성 `voice` / 버튼 `button` / 급감속 `decel` → 숫자 없음 (`ctx.trigger`) |
 | laneChangeConfirmed | 확인 질문 "그때 ({오른쪽/왼쪽}) 차로로 진로를 바꾸던 중이었나요?"의 답 (STT 예/아니요 또는 화면 버튼). 질문 문장은 `result.confirm.question`. true(예) / false(아니요) / 묻기 전에는 넣지 않음 (`ctx.laneChangeConfirmed`) |
 | occupants | Vehicle SDK `registerSeatOccupancy` — 운전석 말고 사람이 앉은 좌석 수 (`ctx.occupants`) |
 | roadType, navCautions | NaviHelper (고속도로 여부, 진로변경 단속·전용차로 주의 지점) |
